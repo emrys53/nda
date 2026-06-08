@@ -57,6 +57,7 @@ namespace nda {
   template <typename F, Array... As>
   inline constexpr bool is_expression<expr_call<F, As...>> = true;
 
+#ifdef NDA_HAVE_XSIMD
   namespace detail {
     template <typename F, typename ValueType>
     struct emulator : simd::mock_simd<emulator<F, ValueType>, ValueType> {
@@ -70,6 +71,7 @@ namespace nda {
       }
     };
   } // namespace detail
+#endif // NDA_HAVE_XSIMD
   /**
    * @addtogroup av_math
    * @{
@@ -128,6 +130,7 @@ namespace nda {
       return f(std::get<Is>(a)[arg]...);
     }
 
+#ifdef NDA_HAVE_XSIMD
     // Implementation of load operator.
     template <size_t... Is, typename... Args>
     FORCEINLINE auto _call_load(simd::vectorize_t, std::index_sequence<Is...>, Args const &...args) const {
@@ -145,6 +148,7 @@ namespace nda {
         return detail::emulator<F, ValueType>{f}.load(std::get<Is>(a).load(simd::emulate, args...)...);
       }
     }
+#endif // NDA_HAVE_XSIMD
 
     public:
     /**
@@ -164,6 +168,7 @@ namespace nda {
       return _call(std::make_index_sequence<sizeof...(As)>{}, args...);
     }
 
+#ifdef NDA_HAVE_XSIMD
     template <typename... Args>
     FORCEINLINE auto load(simd::vectorize_t, Args const &...args) const {
       return _call_load(simd::vectorize, std::make_index_sequence<sizeof...(As)>{}, args...);
@@ -173,6 +178,7 @@ namespace nda {
     FORCEINLINE auto load(simd::emulate_t, Args const &...args) const {
       return _call_load(simd::emulate, std::make_index_sequence<sizeof...(As)>{}, args...);
     }
+#endif // NDA_HAVE_XSIMD
 
     /**
      * @brief Subscript operator.

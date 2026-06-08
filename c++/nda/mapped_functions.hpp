@@ -82,6 +82,7 @@ namespace nda {
     struct conj_f {
       auto operator()(auto const &x) const { return conj(x); };
 
+#ifdef NDA_HAVE_XSIMD
       auto load(auto const &x) const {
         //TODO: We need to change this check after custom complex class.
         if constexpr (xsimd::is_batch_complex<std::remove_cvref_t<decltype(x)>>::value) {
@@ -90,6 +91,7 @@ namespace nda {
           return x;
         }
       }
+#endif
     };
 
     struct pow_f {
@@ -98,11 +100,13 @@ namespace nda {
         using std::pow;
         return pow(x, exponent);
       }
+#ifdef NDA_HAVE_XSIMD
       FORCEINLINE auto load(auto const &x) const {
         using xsimd::pow;
         using simd_t = std::remove_cvref_t<decltype(x)>;
         return pow(x, simd_t(exponent));
       }
+#endif
     };
 
     template <typename F>
@@ -237,7 +241,11 @@ namespace nda {
   template <Array A>
   auto floor(A &&a)  {
     auto lambda = [](auto const &x) {
+#ifdef NDA_HAVE_XSIMD
       using xsimd::floor;
+#else
+      using std::floor;
+#endif
       return floor(x);
     };
 
@@ -286,7 +294,11 @@ namespace nda {
   template <Array A>
   auto exp(A &&a) requires(get_algebra<A> != 'M') {
     auto lambda = [](auto const &x) {
+#ifdef NDA_HAVE_XSIMD
       using xsimd::exp;
+#else
+      using std::exp;
+#endif
       return exp(x);
     };
 
@@ -301,7 +313,11 @@ namespace nda {
   template <Array A>
   auto cos(A &&a) requires(get_algebra<A> != 'M') {
     auto lambda = [](auto const &x) {
+#ifdef NDA_HAVE_XSIMD
       using xsimd::cos;
+#else
+      using std::cos;
+#endif
       return cos(x);
     };
 
@@ -316,7 +332,11 @@ namespace nda {
   template <Array A>
   auto sin(A &&a) requires(get_algebra<A> != 'M') {
     auto lambda = [](auto const &x) {
+#ifdef NDA_HAVE_XSIMD
       using xsimd::sin;
+#else
+      using std::sin;
+#endif
       return sin(x);
     };
 
@@ -331,7 +351,11 @@ namespace nda {
   template <Array A>
   auto tan(A &&a) requires(get_algebra<A> != 'M') {
     auto lambda = [](auto const &x) {
+#ifdef NDA_HAVE_XSIMD
       using xsimd::tan;
+#else
+      using std::tan;
+#endif
       return tan(x);
     };
 
@@ -346,7 +370,11 @@ namespace nda {
   template <Array A>
   auto cosh(A &&a) requires(get_algebra<A> != 'M') {
     auto lambda = [](auto const &x) {
+#ifdef NDA_HAVE_XSIMD
       using xsimd::cosh;
+#else
+      using std::cosh;
+#endif
       return cosh(x);
     };
 
@@ -361,7 +389,11 @@ namespace nda {
   template <Array A>
   auto sinh(A &&a) requires(get_algebra<A> != 'M') {
     auto lambda = [](auto const &x) {
+#ifdef NDA_HAVE_XSIMD
       using xsimd::sinh;
+#else
+      using std::sinh;
+#endif
       return sinh(x);
     };
 
@@ -376,7 +408,11 @@ namespace nda {
   template <Array A>
   auto tanh(A &&a) requires(get_algebra<A> != 'M') {
     auto lambda = [](auto const &x) {
+#ifdef NDA_HAVE_XSIMD
       using xsimd::tanh;
+#else
+      using std::tanh;
+#endif
       return tanh(x);
     };
 
@@ -391,7 +427,11 @@ namespace nda {
   template <Array A>
   auto acos(A &&a) requires(get_algebra<A> != 'M') {
     auto lambda = [](auto const &x) {
+#ifdef NDA_HAVE_XSIMD
       using xsimd::acos;
+#else
+      using std::acos;
+#endif
       return acos(x);
     };
 
@@ -406,7 +446,11 @@ namespace nda {
   template <Array A>
   auto asin(A &&a) requires(get_algebra<A> != 'M') {
     auto lambda = [](auto const &x) {
+#ifdef NDA_HAVE_XSIMD
       using xsimd::asin;
+#else
+      using std::asin;
+#endif
       return asin(x);
     };
 
@@ -421,7 +465,11 @@ namespace nda {
   template <Array A>
   auto atan(A &&a) requires(get_algebra<A> != 'M') {
     auto lambda = [](auto const &x) {
+#ifdef NDA_HAVE_XSIMD
       using xsimd::atan;
+#else
+      using std::atan;
+#endif
       return atan(x);
     };
 
@@ -436,7 +484,11 @@ namespace nda {
   template <Array A>
   auto log(A &&a) requires(get_algebra<A> != 'M') {
     auto lambda = [](auto const &x) {
+#ifdef NDA_HAVE_XSIMD
       using xsimd::log;
+#else
+      using std::log;
+#endif
       return log(x);
     };
 
@@ -451,7 +503,11 @@ namespace nda {
   template <Array A>
   auto sqrt(A &&a) requires(get_algebra<A> != 'M') {
     auto lambda = [](auto const &x) {
+#ifdef NDA_HAVE_XSIMD
       using xsimd::sqrt;
+#else
+      using std::sqrt;
+#endif
       return sqrt(x);
     };
 
