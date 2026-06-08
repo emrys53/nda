@@ -45,6 +45,7 @@
 #include "./stdutil.hpp"
 #include "./tensor.hpp"
 #include "./traits.hpp"
+#include "./simd.hpp"
 
 // If we are using c2py, include converters automatically
 #ifdef C2PY_INCLUDED
