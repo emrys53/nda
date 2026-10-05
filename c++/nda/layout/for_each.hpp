@@ -11,7 +11,11 @@
 #pragma once
 
 #include "./permutation.hpp"
+#include "../concepts.hpp"
+#include "../macros.hpp"
+#include "../simd/simd.hpp"
 #include "../stdutil/array.hpp"
+#include "../traits.hpp"
 
 #include <array>
 #include <concepts>
@@ -80,8 +84,8 @@ namespace nda {
       const long imax        = get_extent<J, R, StaticExtents>(shape);
       // Only difference from scalar implementation is that in the last dimension we call f_simd whenever we can.
       if constexpr (I == R - 1) {
-        size_t i               = 0;
-        const size_t ilim      = imax & -static_cast<int64_t>(SIMD_SIZE);
+        size_t i          = 0;
+        const size_t ilim = imax & -static_cast<int64_t>(SIMD_SIZE);
         for (; i < ilim; i += SIMD_SIZE) {
           std::apply(f_simd, idxs);
           idxs[J] += SIMD_SIZE;
@@ -159,6 +163,46 @@ namespace nda {
     auto idxs = nda::stdutil::make_initialized_array<R>(0l);
     detail::for_each_static_impl<0, 0, 0, SIMD_SIZE, F_SIMD, F_SCALAR>(shape, idxs, f_simd, f_scalar);
   }
+
+#ifdef NDA_HAVE_XSIMD
+  /**
+   * @brief Loop over all elements of one or more nda::Array objects of the same shape in SIMD-width blocks.
+   *
+   * @details All arrays must be contiguous with the same stride order and shape. If every array satisfies
+   * nda::supports_flat_loop_v, the callables receive one nda::_linear_index_t per block (`f_simd`) or element
+   * (`f_scalar`), otherwise a multi-index with `f_simd` stepping along the fastest dimension.
+   *
+   * @tparam F_SIMD Callable type applied to full SIMD blocks.
+   * @tparam F_SCALAR Callable type applied to the remaining elements.
+   * @tparam First nda::Array type of the first array.
+   * @tparam Rest nda::Array types of the other arrays.
+   * @param f_simd Callable applied to full SIMD blocks.
+   * @param f_scalar Callable applied to the remaining elements.
+   * @param first First array (determines the SIMD width, stride order and shape).
+   * @param rest Other arrays.
+   */
+  template <typename F_SIMD, typename F_SCALAR, Array First, Array... Rest>
+  FORCEINLINE void for_each_simd(F_SIMD &&f_simd, F_SCALAR &&f_scalar, First const &first, [[maybe_unused]] Rest const &...rest) { // NOLINT
+    static_assert(Vectorizable<get_value_t<First>> and (Vectorizable<get_value_t<Rest>> and ...),
+                  "Error in for_each_simd: All Array elements have to be vectorizable.");
+    static_assert(has_contiguous_layout<First> and (has_contiguous_layout<Rest> and ...),
+                  "Error in for_each_simd: all arrays must have a contiguous layout to be vectorized");
+    static_assert(((get_layout_info<First>.stride_order == get_layout_info<Rest>.stride_order) and ...),
+                  "Error in for_each_simd: all arrays must have the same stride order to be vectorized");
+    static constexpr size_t simd_size = native_simd<get_value_t<First>>::size;
+    static constexpr bool flat_loop   = supports_flat_loop_v<First> and (supports_flat_loop_v<Rest> and ...);
+    EXPECTS(((first.shape() == rest.shape()) and ...));
+    if constexpr (flat_loop) {
+      const long n    = first.size();
+      const long nlim = n & -simd_size;
+      long k          = 0;
+      for (; k < nlim; k += simd_size) { f_simd(_linear_index_t{k}); }
+      for (; k < n; ++k) { f_scalar(_linear_index_t{k}); }
+    } else {
+      for_each_static<0, get_layout_info<First>.stride_order, simd_size>(first.shape(), f_simd, f_scalar);
+    }
+  }
+#endif // NDA_HAVE_XSIMD
 
   /** @} */
 

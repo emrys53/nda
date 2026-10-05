@@ -264,6 +264,8 @@ FORCEINLINE decltype(auto) operator()(Ts const &...idxs) && noexcept(has_no_boun
 
 #ifdef NDA_HAVE_XSIMD
 private:
+using native_simd_t = native_simd<std::remove_const_t<ValueType>>;
+
 // Right now we are only doing SIMD access in contiguous layouts. If this rule is relaxed we need to change this function as well.
 void assert_simd_access_bounds(const long offset) const noexcept(has_no_boundcheck) {
   static_assert(
@@ -294,6 +296,17 @@ FORCEINLINE void store(const native_simd<ValueType> &value, Args... idx) noexcep
   const long offset = lay(idx...);
   assert_simd_access_bounds(offset);
   value.store_unaligned(data() + offset);
+}
+/// SIMD load at a linear index (contiguous layouts only): the index is the offset, no index arithmetic.
+FORCEINLINE native_simd_t load(_linear_index_t idx) const noexcept(has_no_boundcheck) {
+  assert_simd_access_bounds(idx.value);
+  return native_simd_t::load_unaligned(data() + idx.value);
+}
+
+/// SIMD store at a linear index (contiguous layouts only), see load(_linear_index_t).
+FORCEINLINE void store(const native_simd_t &value, _linear_index_t idx) noexcept(has_no_boundcheck) {
+  assert_simd_access_bounds(idx.value);
+  value.store_unaligned(data() + idx.value);
 }
 #endif // NDA_HAVE_XSIMD
 

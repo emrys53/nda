@@ -380,6 +380,23 @@ namespace nda {
   constexpr bool has_layout_smallest_stride_is_one = (has_smallest_stride_is_one(get_layout_info<A>.prop));
 
   /**
+   * @brief Type trait that is std::true_type if type `A` can be evaluated with one flat loop over the linear index
+   * instead of a loop over the multi-dimensional index.
+   *
+   * @details std::false_type by default. Specialized for nda::basic_array, nda::basic_array_view and for expressions,
+   * which support a flat loop if none of their nodes depends on the position of an element: matrix +/- scalar only
+   * touches the diagonal and does not. The memory layout is not considered, see nda::has_contiguous_layout.
+   *
+   * @tparam A Type to check.
+   */
+  template <typename A>
+  struct supports_flat_loop : std::false_type {};
+
+  /// Constexpr variable that is true if nda::supports_flat_loop is std::true_type for the cvref-stripped type `A`.
+  template <typename A>
+  inline constexpr bool supports_flat_loop_v = supports_flat_loop<std::remove_cvref_t<A>>::value;
+
+  /**
    * @brief A small wrapper around a single long integer to be used as a linear index.
    */
   struct _linear_index_t {

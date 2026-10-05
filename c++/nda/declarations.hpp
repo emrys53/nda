@@ -335,6 +335,14 @@ namespace nda {
   inline constexpr layout_info_t get_layout_info<basic_array_view<ValueType, Rank, Layout, Algebra, AccessorPolicy, OwningPolicy>> =
      basic_array_view<ValueType, Rank, Layout, Algebra, AccessorPolicy, OwningPolicy>::layout_t::layout_info;
 
+  /// Specialization of nda::supports_flat_loop for nda::basic_array types.
+  template <typename ValueType, int Rank, typename Layout, char Algebra, typename ContainerPolicy>
+  struct supports_flat_loop<basic_array<ValueType, Rank, Layout, Algebra, ContainerPolicy>> : std::true_type {};
+
+  /// Specialization of nda::supports_flat_loop for nda::basic_array_view types.
+  template <typename ValueType, int Rank, typename Layout, char Algebra, typename AccessorPolicy, typename OwningPolicy>
+  struct supports_flat_loop<basic_array_view<ValueType, Rank, Layout, Algebra, AccessorPolicy, OwningPolicy>> : std::true_type {};
+
   /**
    * @brief Get the type of the nda::basic_array_view that would be obtained by constructing a view from a given type.
    * @tparam T Type to construct a view from.
@@ -393,6 +401,10 @@ namespace nda {
   template <char OP, Array A>
   inline constexpr layout_info_t get_layout_info<expr_unary<OP, A>> = get_layout_info<A>;
 
+  /// Specialization of nda::supports_flat_loop for nda::expr_unary types.
+  template <char OP, Array A>
+  struct supports_flat_loop<expr_unary<OP, A>> : std::bool_constant<supports_flat_loop_v<A>> {};
+
   /// Specialization of nda::get_algebra for nda::expr types.
   template <char OP, typename L, typename R>
   inline constexpr char get_algebra<expr<OP, L, R>> = expr<OP, L, R>::algebra;
@@ -400,6 +412,12 @@ namespace nda {
   /// Specialization of nda::get_layout_info for nda::expr types.
   template <char OP, typename L, typename R>
   inline constexpr layout_info_t get_layout_info<expr<OP, L, R>> = expr<OP, L, R>::compute_layout_info();
+
+  /// Specialization of nda::supports_flat_loop for nda::expr types: false for matrix +/- scalar, which only touches the diagonal.
+  template <char OP, typename L, typename R>
+  struct supports_flat_loop<expr<OP, L, R>>
+     : std::bool_constant<not((OP == '+' or OP == '-') and expr<OP, L, R>::algebra == 'M' and (expr<OP, L, R>::l_is_scalar or expr<OP, L, R>::r_is_scalar))
+                          and (expr<OP, L, R>::l_is_scalar or supports_flat_loop_v<L>) and (expr<OP, L, R>::r_is_scalar or supports_flat_loop_v<R>)> {};
 
   /// Specialization of nda::is_expression for nda::expr_unary types.
   template <char OP, Array A>
@@ -414,6 +432,7 @@ namespace nda {
 
   template <typename A, typename T = get_value_t<A>>
   inline constexpr bool is_simd_enabled_v = std::is_same_v<simd::dispatch_policy_t<A, T>, simd::vectorize_t>;
+
 
   /** @} */
 
