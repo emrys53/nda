@@ -281,7 +281,7 @@ void check_all_simd_traits() {
   static_assert(has_vectorizable_type<decltype(V)>());
   static_assert(has_load_function<decltype(V)>());
   static_assert(!is_simd_enabled_v<decltype(V)>); // Not contiguous
-  array<T, 1> slice_size(std::array{16});
+  array<T, 1> slice_size(std::array<long, 1>{16});
   auto sliced_expr = V + slice_size;
   static_assert(has_same_layout<decltype(sliced_expr)>());
   static_assert(has_vectorizable_type<decltype(sliced_expr)>());
