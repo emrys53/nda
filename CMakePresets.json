@@ -9,6 +9,7 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CXX_FLAGS": "-march=native",
+        "SIMDSupport": "ON",
         "Build_Benchs": "ON",
         "Build_Tests": "OFF",
         "PythonSupport": "OFF"
