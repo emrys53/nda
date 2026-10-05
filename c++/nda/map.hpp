@@ -14,7 +14,6 @@
 #include "./layout/range.hpp"
 #include "./macros.hpp"
 #include "./traits.hpp"
-#include "./simd/simd_cost.hpp"
 
 #include <cstddef>
 #include <utility>
@@ -61,21 +60,6 @@ namespace nda {
   template <typename F, Array... As>
   struct supports_flat_loop<expr_call<F, As...>> : std::bool_constant<(supports_flat_loop_v<As> and ...)> {};
 
-#ifdef NDA_HAVE_XSIMD
-  namespace detail {
-    template <typename F, typename ValueType>
-    struct emulator : simd::mock_simd<emulator<F, ValueType>, ValueType> {
-      F functor;
-
-      FORCEINLINE emulator(const F functor) : functor(functor) {}
-
-      template <typename... ValueTypeArgs>
-      FORCEINLINE auto operator()(ValueTypeArgs const &...values) const {
-        return functor(values...);
-      }
-    };
-  } // namespace detail
-#endif // NDA_HAVE_XSIMD
   /**
    * @addtogroup av_math
    * @{
@@ -137,20 +121,8 @@ namespace nda {
 #ifdef NDA_HAVE_XSIMD
     // Implementation of load operator.
     template <size_t... Is, typename... Args>
-    FORCEINLINE auto _call_load(simd::vectorize_t, std::index_sequence<Is...>, Args const &...args) const {
-      return f.load(std::get<Is>(a).load(simd::vectorize, args...)...);
-    }
-
-    template <size_t... Is, typename... Args>
-    FORCEINLINE auto _call_load(simd::emulate_t, std::index_sequence<Is...>, Args const &...args) const {
-      static_assert(sizeof...(As) > 0);
-      using FirstElementType = std::tuple_element_t<0, decltype(a)>;
-      using ValueType        = get_value_t<FirstElementType>;
-      if constexpr (LoadWithNativeSimd<F, ValueType, sizeof...(As)>) {
-        return f.load(std::get<Is>(a).load(simd::emulate, args...)...);
-      } else {
-        return detail::emulator<F, ValueType>{f}.load(std::get<Is>(a).load(simd::emulate, args...)...);
-      }
+    FORCEINLINE auto _call_load(std::index_sequence<Is...>, Args const &...args) const {
+      return f.load(std::get<Is>(a).load(args...)...);
     }
 #endif // NDA_HAVE_XSIMD
 
@@ -174,13 +146,8 @@ namespace nda {
 
 #ifdef NDA_HAVE_XSIMD
     template <typename... Args>
-    FORCEINLINE auto load(simd::vectorize_t, Args const &...args) const {
-      return _call_load(simd::vectorize, std::make_index_sequence<sizeof...(As)>{}, args...);
-    }
-
-    template <typename... Args>
-    FORCEINLINE auto load(simd::emulate_t, Args const &...args) const {
-      return _call_load(simd::emulate, std::make_index_sequence<sizeof...(As)>{}, args...);
+    FORCEINLINE auto load(Args const &...args) const {
+      return _call_load(std::make_index_sequence<sizeof...(As)>{}, args...);
     }
 #endif // NDA_HAVE_XSIMD
 
