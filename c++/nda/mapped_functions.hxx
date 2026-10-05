@@ -28,56 +28,70 @@
      2- call it
         :call VimExpandSimple()
 
+   The templates below also generate the named math functors. Keep each
+   expansion template in one paragraph so VimExpandSimple copies it in full.
 
-   It is better than C macro, it gives a cleaner code
-   (for error messages, no preproc, doc generation : otherwise no doc string ...)
-
-  ----  normal mapping -------
-
-  VIMEXPAND abs imag floor
+  VIMEXPAND abs
   /// \brief Function @ for nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
   /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::@` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
-  auto @(A &&a)  {
-    return nda::map(
-       [](auto const &x) {
-         using std::@;
-         return @(x);
-       })(std::forward<A>(a));
+  auto @(A &&a) {
+    if constexpr (std::is_unsigned_v<get_value_t<A>>) {
+      return std::forward<A>(a);
+    } else {
+      return nda::map(detail::@_f{})(std::forward<A>(a));
+    }
   }
 
- ---------  same, no using std::-------
-
-  VIMEXPAND real abs2 isnan
+  VIMEXPAND imag floor real abs2
   /// \brief Function @ for nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
-  /// \tparam A nda::ArrayOrScalar type..
+  /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return A lazy nda::expr_call object (nda::Array) or the result of `nda::detail::@` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of the scalar functor applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto @(A &&a) {
-    return nda::map(
-       [](auto const &x) {return detail::@(x); })(std::forward<A>(a));
+    return nda::map(detail::@_f{})(std::forward<A>(a));
   }
 
- ---------  mapping with matrix excluded -------
+  VIMEXPAND isnan
+  /// \brief Function @ for nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
+  ///
+  /// \tparam A nda::ArrayOrScalar type.
+  /// \param a nda::ArrayOrScalar object.
+  /// \return A lazy nda::expr_call object (nda::Array) or the scalar NaN test (nda::Scalar).
+  template <ArrayOrScalar A>
+  auto @(A &&a) {
+    return nda::map([](auto const &x) { return detail::@(x); })(std::forward<A>(a));
+  }
 
   VIMEXPAND exp cos sin tan cosh sinh tanh acos asin atan log sqrt
+  namespace detail {
+    struct @_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::@;
+        return @(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires PreservesScalarType<@_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::@(x);
+      }
+#endif
+    };
+  } // namespace detail
   /// \brief Function @ for non-matrix nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return  A lazy nda::expr_call object (nda::Array) or the result of `std::@` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::@` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto @(A &&a) requires(get_algebra<A> != 'M') {
-    return nda::map(
-       [](auto const &x) {
-         using std::@;
-         return @(x);
-       })(std::forward<A>(a));
+    return nda::map(detail::@_f{})(std::forward<A>(a));
   }
 
 */
@@ -91,21 +105,17 @@ namespace nda {
 
   // --- VIMEXPAND_START  --DO NOT EDIT BELOW --
 
-
   /// \brief Function abs for nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
   /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::abs` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
-  auto abs(A &&a)  {
+  auto abs(A &&a) {
     if constexpr (std::is_unsigned_v<get_value_t<A>>) {
       return std::forward<A>(a);
     } else {
-      return nda::map([](auto const &x) {
-        using std::abs;
-        return abs(x);
-      })(std::forward<A>(a));
+      return nda::map(detail::abs_f{})(std::forward<A>(a));
     }
   }
 
@@ -113,296 +123,352 @@ namespace nda {
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::imag` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of the scalar functor applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
-  auto imag(A &&a)  {
-    return nda::map(
-       [](auto const &x) {
-         using std::imag;
-         return imag(x);
-       })(std::forward<A>(a));
+  auto imag(A &&a) {
+    return nda::map(detail::imag_f{})(std::forward<A>(a));
   }
 
   /// \brief Function floor for nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::floor` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of the scalar functor applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
-  auto floor(A &&a)  {
-    auto lambda = [](auto const &x) {
-#ifdef NDA_HAVE_XSIMD
-      using xsimd::floor;
-#else
-      using std::floor;
-#endif
-      return floor(x);
-    };
-
-    return nda::map(detail::unary_functor<decltype(lambda)>{})(std::forward<A>(a));
+  auto floor(A &&a) {
+    return nda::map(detail::floor_f{})(std::forward<A>(a));
   }
 
   /// \brief Function real for nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
-  /// \tparam A nda::ArrayOrScalar type..
+  /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return A lazy nda::expr_call object (nda::Array) or the result of `nda::detail::real` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of the scalar functor applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto real(A &&a) {
-    return nda::map(
-       [](auto const &x) {return detail::real(x); })(std::forward<A>(a));
+    return nda::map(detail::real_f{})(std::forward<A>(a));
   }
 
   /// \brief Function abs2 for nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
-  /// \tparam A nda::ArrayOrScalar type..
+  /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return A lazy nda::expr_call object (nda::Array) or the result of `nda::detail::abs2` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of the scalar functor applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto abs2(A &&a) {
-    return nda::map(
-       [](auto const &x) {return detail::abs2(x); })(std::forward<A>(a));
+    return nda::map(detail::abs2_f{})(std::forward<A>(a));
   }
 
   /// \brief Function isnan for nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
-  /// \tparam A nda::ArrayOrScalar type..
+  /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return A lazy nda::expr_call object (nda::Array) or the result of `nda::detail::isnan` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the scalar NaN test (nda::Scalar).
   template <ArrayOrScalar A>
   auto isnan(A &&a) {
-    return nda::map(
-       [](auto const &x) {return detail::isnan(x); })(std::forward<A>(a));
+    return nda::map([](auto const &x) { return detail::isnan(x); })(std::forward<A>(a));
   }
 
+  namespace detail {
+    struct exp_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::exp;
+        return exp(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires PreservesScalarType<exp_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::exp(x);
+      }
+#endif
+    };
+  } // namespace detail
   /// \brief Function exp for non-matrix nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return  A lazy nda::expr_call object (nda::Array) or the result of `std::exp` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::exp` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto exp(A &&a) requires(get_algebra<A> != 'M') {
-    auto lambda = [](auto const &x) {
-#ifdef NDA_HAVE_XSIMD
-      using xsimd::exp;
-#else
-      using std::exp;
-#endif
-      return exp(x);
-    };
-
-    return nda::map(detail::unary_functor<decltype(lambda)>{})(std::forward<A>(a));
+    return nda::map(detail::exp_f{})(std::forward<A>(a));
   }
 
+  namespace detail {
+    struct cos_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::cos;
+        return cos(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires PreservesScalarType<cos_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::cos(x);
+      }
+#endif
+    };
+  } // namespace detail
   /// \brief Function cos for non-matrix nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return  A lazy nda::expr_call object (nda::Array) or the result of `std::cos` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::cos` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto cos(A &&a) requires(get_algebra<A> != 'M') {
-    auto lambda = [](auto const &x) {
-#ifdef NDA_HAVE_XSIMD
-      using xsimd::cos;
-#else
-      using std::cos;
-#endif
-      return cos(x);
-    };
-
-    return nda::map(detail::unary_functor<decltype(lambda)>{})(std::forward<A>(a));
+    return nda::map(detail::cos_f{})(std::forward<A>(a));
   }
 
+  namespace detail {
+    struct sin_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::sin;
+        return sin(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires PreservesScalarType<sin_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::sin(x);
+      }
+#endif
+    };
+  } // namespace detail
   /// \brief Function sin for non-matrix nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return  A lazy nda::expr_call object (nda::Array) or the result of `std::sin` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::sin` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto sin(A &&a) requires(get_algebra<A> != 'M') {
-    auto lambda = [](auto const &x) {
-#ifdef NDA_HAVE_XSIMD
-      using xsimd::sin;
-#else
-      using std::sin;
-#endif
-      return sin(x);
-    };
-
-    return nda::map(detail::unary_functor<decltype(lambda)>{})(std::forward<A>(a));
+    return nda::map(detail::sin_f{})(std::forward<A>(a));
   }
 
+  namespace detail {
+    struct tan_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::tan;
+        return tan(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires PreservesScalarType<tan_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::tan(x);
+      }
+#endif
+    };
+  } // namespace detail
   /// \brief Function tan for non-matrix nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return  A lazy nda::expr_call object (nda::Array) or the result of `std::tan` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::tan` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto tan(A &&a) requires(get_algebra<A> != 'M') {
-    auto lambda = [](auto const &x) {
-#ifdef NDA_HAVE_XSIMD
-      using xsimd::tan;
-#else
-      using std::tan;
-#endif
-      return tan(x);
-    };
-
-    return nda::map(detail::unary_functor<decltype(lambda)>{})(std::forward<A>(a));
+    return nda::map(detail::tan_f{})(std::forward<A>(a));
   }
 
+  namespace detail {
+    struct cosh_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::cosh;
+        return cosh(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires PreservesScalarType<cosh_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::cosh(x);
+      }
+#endif
+    };
+  } // namespace detail
   /// \brief Function cosh for non-matrix nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return  A lazy nda::expr_call object (nda::Array) or the result of `std::cosh` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::cosh` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto cosh(A &&a) requires(get_algebra<A> != 'M') {
-    auto lambda = [](auto const &x) {
-#ifdef NDA_HAVE_XSIMD
-      using xsimd::cosh;
-#else
-      using std::cosh;
-#endif
-      return cosh(x);
-    };
-
-    return nda::map(detail::unary_functor<decltype(lambda)>{})(std::forward<A>(a));
+    return nda::map(detail::cosh_f{})(std::forward<A>(a));
   }
 
+  namespace detail {
+    struct sinh_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::sinh;
+        return sinh(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires PreservesScalarType<sinh_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::sinh(x);
+      }
+#endif
+    };
+  } // namespace detail
   /// \brief Function sinh for non-matrix nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return  A lazy nda::expr_call object (nda::Array) or the result of `std::sinh` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::sinh` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto sinh(A &&a) requires(get_algebra<A> != 'M') {
-    auto lambda = [](auto const &x) {
-#ifdef NDA_HAVE_XSIMD
-      using xsimd::sinh;
-#else
-      using std::sinh;
-#endif
-      return sinh(x);
-    };
-
-    return nda::map(detail::unary_functor<decltype(lambda)>{})(std::forward<A>(a));
+    return nda::map(detail::sinh_f{})(std::forward<A>(a));
   }
 
+  namespace detail {
+    struct tanh_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::tanh;
+        return tanh(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires PreservesScalarType<tanh_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::tanh(x);
+      }
+#endif
+    };
+  } // namespace detail
   /// \brief Function tanh for non-matrix nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return  A lazy nda::expr_call object (nda::Array) or the result of `std::tanh` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::tanh` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto tanh(A &&a) requires(get_algebra<A> != 'M') {
-    auto lambda = [](auto const &x) {
-#ifdef NDA_HAVE_XSIMD
-      using xsimd::tanh;
-#else
-      using std::tanh;
-#endif
-      return tanh(x);
-    };
-
-    return nda::map(detail::unary_functor<decltype(lambda)>{})(std::forward<A>(a));
+    return nda::map(detail::tanh_f{})(std::forward<A>(a));
   }
 
+  namespace detail {
+    struct acos_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::acos;
+        return acos(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires PreservesScalarType<acos_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::acos(x);
+      }
+#endif
+    };
+  } // namespace detail
   /// \brief Function acos for non-matrix nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return  A lazy nda::expr_call object (nda::Array) or the result of `std::acos` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::acos` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto acos(A &&a) requires(get_algebra<A> != 'M') {
-    auto lambda = [](auto const &x) {
-#ifdef NDA_HAVE_XSIMD
-      using xsimd::acos;
-#else
-      using std::acos;
-#endif
-      return acos(x);
-    };
-
-    return nda::map(detail::unary_functor<decltype(lambda)>{})(std::forward<A>(a));
+    return nda::map(detail::acos_f{})(std::forward<A>(a));
   }
 
+  namespace detail {
+    struct asin_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::asin;
+        return asin(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires PreservesScalarType<asin_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::asin(x);
+      }
+#endif
+    };
+  } // namespace detail
   /// \brief Function asin for non-matrix nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return  A lazy nda::expr_call object (nda::Array) or the result of `std::asin` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::asin` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto asin(A &&a) requires(get_algebra<A> != 'M') {
-    auto lambda = [](auto const &x) {
-#ifdef NDA_HAVE_XSIMD
-      using xsimd::asin;
-#else
-      using std::asin;
-#endif
-      return asin(x);
-    };
-
-    return nda::map(detail::unary_functor<decltype(lambda)>{})(std::forward<A>(a));
+    return nda::map(detail::asin_f{})(std::forward<A>(a));
   }
 
+  namespace detail {
+    struct atan_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::atan;
+        return atan(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires PreservesScalarType<atan_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::atan(x);
+      }
+#endif
+    };
+  } // namespace detail
   /// \brief Function atan for non-matrix nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return  A lazy nda::expr_call object (nda::Array) or the result of `std::atan` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::atan` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto atan(A &&a) requires(get_algebra<A> != 'M') {
-    auto lambda = [](auto const &x) {
-#ifdef NDA_HAVE_XSIMD
-      using xsimd::atan;
-#else
-      using std::atan;
-#endif
-      return atan(x);
-    };
-
-    return nda::map(detail::unary_functor<decltype(lambda)>{})(std::forward<A>(a));
+    return nda::map(detail::atan_f{})(std::forward<A>(a));
   }
 
+  namespace detail {
+    struct log_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::log;
+        return log(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires PreservesScalarType<log_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::log(x);
+      }
+#endif
+    };
+  } // namespace detail
   /// \brief Function log for non-matrix nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return  A lazy nda::expr_call object (nda::Array) or the result of `std::log` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::log` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto log(A &&a) requires(get_algebra<A> != 'M') {
-    auto lambda = [](auto const &x) {
-#ifdef NDA_HAVE_XSIMD
-      using xsimd::log;
-#else
-      using std::log;
-#endif
-      return log(x);
-    };
-
-    return nda::map(detail::unary_functor<decltype(lambda)>{})(std::forward<A>(a));
+    return nda::map(detail::log_f{})(std::forward<A>(a));
   }
 
+  namespace detail {
+    struct sqrt_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::sqrt;
+        return sqrt(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires PreservesScalarType<sqrt_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::sqrt(x);
+      }
+#endif
+    };
+  } // namespace detail
   /// \brief Function sqrt for non-matrix nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
-  /// \return  A lazy nda::expr_call object (nda::Array) or the result of `std::sqrt` applied to the object (nda::Scalar).
+  /// \return A lazy nda::expr_call object (nda::Array) or the result of `std::sqrt` applied to the object (nda::Scalar).
   template <ArrayOrScalar A>
   auto sqrt(A &&a) requires(get_algebra<A> != 'M') {
-    auto lambda = [](auto const &x) {
-#ifdef NDA_HAVE_XSIMD
-      using xsimd::sqrt;
-#else
-      using std::sqrt;
-#endif
-      return sqrt(x);
-    };
-
-    return nda::map(detail::unary_functor<decltype(lambda)>{})(std::forward<A>(a));
+    return nda::map(detail::sqrt_f{})(std::forward<A>(a));
   }
 
   /** @} */
 
-}
+} // namespace nda

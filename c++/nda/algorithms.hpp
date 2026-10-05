@@ -16,6 +16,7 @@
 #include "./layout/range.hpp"
 #include "./macros.hpp"
 #include "./map.hpp"
+#include "./simd/simd_dispatch.hpp"
 #include "./traits.hpp"
 
 #include <algorithm>
@@ -138,8 +139,7 @@ namespace nda {
   template <Array A>
   auto max_element(A const &a) {
 #ifdef NDA_HAVE_XSIMD
-    using dispatch_t = simd::dispatch_policy_t<A>;
-    if constexpr (std::is_same_v<dispatch_t, simd::scalar_t>) {
+    if constexpr (not is_simd_enabled_v<A>) {
       return fold(
          [](auto const &x, auto const &y) {
            using std::max;
@@ -150,7 +150,7 @@ namespace nda {
       using value_t = get_value_t<A>;
       using simd_t  = native_simd<value_t>;
       simd_t max_simd(get_first_element(a));
-      auto f_simd        = [&a, &max_simd](auto &&...args) { max_simd = xsimd::max(max_simd, a.load(dispatch_t{}, args...)); };
+      auto f_simd        = [&a, &max_simd](auto &&...args) { max_simd = xsimd::max(max_simd, a.load(args...)); };
       value_t max_scalar = get_first_element(a);
       auto f_scalar      = [&a, &max_scalar](auto &&...args) { max_scalar = std::max(max_scalar, a(args...)); };
       nda::for_each_static<0, get_layout_info<A>.stride_order, simd_t::size>(a.shape(), std::move(f_simd), std::move(f_scalar));
@@ -178,8 +178,7 @@ namespace nda {
   template <Array A>
   auto min_element(A const &a) {
 #ifdef NDA_HAVE_XSIMD
-    using dispatch_t = simd::dispatch_policy_t<A>;
-    if constexpr (std::is_same_v<dispatch_t, simd::scalar_t>) {
+    if constexpr (not is_simd_enabled_v<A>) {
       return fold(
          [](auto const &x, auto const &y) {
            using std::min;
@@ -190,7 +189,7 @@ namespace nda {
       using value_t = get_value_t<A>;
       using simd_t  = native_simd<value_t>;
       simd_t min_simd(get_first_element(a));
-      auto f_simd        = [&a, &min_simd](auto &&...args) { min_simd = xsimd::min(min_simd, a.load(dispatch_t{}, args...)); };
+      auto f_simd        = [&a, &min_simd](auto &&...args) { min_simd = xsimd::min(min_simd, a.load(args...)); };
       value_t min_scalar = get_first_element(a);
       auto f_scalar      = [&a, &min_scalar](auto &&...args) { min_scalar = std::min(min_scalar, a(args...)); };
       nda::for_each_static<0, get_layout_info<A>.stride_order, simd_t::size>(a.shape(), std::move(f_simd), std::move(f_scalar));
@@ -217,8 +216,7 @@ namespace nda {
   template <ArrayOfRank<2> A>
   double frobenius_norm(A const &a) {
 #ifdef NDA_HAVE_XSIMD
-    using dispatch_t = simd::dispatch_policy_t<A>;
-    if constexpr (std::is_same_v<dispatch_t, simd::scalar_t> or is_complex_v<get_value_t<A>>) {
+    if constexpr (not is_simd_enabled_v<A> or is_complex_v<get_value_t<A>>) {
       return std::sqrt(fold(
          [](double r, auto const &x) -> double {
            auto abs = std::abs(x);
@@ -230,7 +228,7 @@ namespace nda {
       using simd_t  = native_simd<value_t>;
       simd_t r_simd(value_t(0));
       auto f_simd = [&a, &r_simd](auto &&...args) {
-        simd_t x   = a.load(dispatch_t{}, args...);
+        simd_t x   = a.load(args...);
         simd_t abs = xsimd::abs(x);
         r_simd     = xsimd::fma(abs, abs, r_simd);
       };
@@ -265,14 +263,13 @@ namespace nda {
   {
     if constexpr (nda::Scalar<Value>) {
 #ifdef NDA_HAVE_XSIMD
-      using dispatch_t = simd::dispatch_policy_t<A>;
-      if constexpr (std::is_same_v<dispatch_t, simd::scalar_t>) {
+      if constexpr (not is_simd_enabled_v<A>) {
         return fold(std::plus<>{}, a);
       } else {
         using value_t = get_value_t<A>;
         using simd_t  = native_simd<value_t>;
         simd_t sum_simd(value_t{0});
-        auto f_simd = [&a, &sum_simd](auto &&...args) { sum_simd += a.load(dispatch_t{}, args...); };
+        auto f_simd = [&a, &sum_simd](auto &&...args) { sum_simd += a.load(args...); };
         value_t sum_scalar{0};
         auto f_scalar = [&a, &sum_scalar](auto &&...args) { sum_scalar += a(args...); };
         nda::for_each_static<0, get_layout_info<A>.stride_order, simd_t::size>(a.shape(), std::move(f_simd), std::move(f_scalar));
@@ -375,14 +372,13 @@ namespace nda {
   {
     if constexpr (nda::Scalar<Value>) {
 #ifdef NDA_HAVE_XSIMD
-      using dispatch_t = simd::dispatch_policy_t<A>;
-      if constexpr (std::is_same_v<dispatch_t, simd::scalar_t>) {
+      if constexpr (not is_simd_enabled_v<A>) {
         return fold(std::multiplies<>{}, a, get_value_t<A>{1});
       } else {
         using value_t = get_value_t<A>;
         using simd_t  = native_simd<value_t>;
         simd_t product_simd(value_t{1});
-        auto f_simd = [&a, &product_simd](auto &&...args) { product_simd *= a.load(dispatch_t{}, args...); };
+        auto f_simd = [&a, &product_simd](auto &&...args) { product_simd *= a.load(args...); };
         value_t product_scalar{1};
         auto f_scalar = [&a, &product_scalar](auto &&...args) { product_scalar *= a(args...); };
         nda::for_each_static<0, get_layout_info<A>.stride_order, simd_t::size>(a.shape(), std::move(f_simd), std::move(f_scalar));

@@ -18,6 +18,7 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
+#include <concepts>
 #include <utility>
 
 namespace nda {
@@ -39,6 +40,12 @@ namespace nda {
       }
     }
 
+    // Get the imaginary part of a scalar.
+    template <nda::Scalar S>
+    auto imag(S x) {
+      return std::imag(x);
+    }
+
     // Get the complex conjugate of a scalar.
     template <nda::Scalar S>
     auto conj(S x) {
@@ -58,18 +65,125 @@ namespace nda {
     // Check if a std::complex<double> is NaN.
     inline bool isnan(std::complex<double> const &z) { return std::isnan(z.real()) or std::isnan(z.imag()); }
 
-    // Functor for nda::detail::conj.
+    // Check if a real floating-point scalar is NaN.
+    template <std::floating_point S>
+    bool isnan(S x) {
+      return std::isnan(x);
+    }
+
     struct conj_f {
-      auto operator()(auto const &x) const { return conj(x); };
+      FORCEINLINE auto operator()(auto const &x) const { return conj(x); }
 
 #ifdef NDA_HAVE_XSIMD
-      auto load(auto const &x) const {
-        //TODO: We need to change this check after custom complex class.
-        if constexpr (xsimd::is_batch_complex<std::remove_cvref_t<decltype(x)>>::value) {
-          return xsimd::conj(x);
+      template <typename T>
+        requires((SimdArithmetic<T> or SimdRealOrComplex<T>) and PreservesScalarType<conj_f, T>)
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        if constexpr (is_complex_v<T>) {
+          using xsimd::conj;
+          return conj(x);
         } else {
           return x;
         }
+      }
+#endif
+    };
+
+    struct real_f {
+      FORCEINLINE auto operator()(auto const &x) const { return detail::real(x); }
+#ifdef NDA_HAVE_XSIMD
+      template <typename T>
+        requires((SimdArithmetic<T> or SimdRealOrComplex<T>) and SimdPreservesLaneWidth<remove_complex_t<T>, T>)
+      FORCEINLINE native_simd<remove_complex_t<T>> load(native_simd<T> const &x) const {
+        if constexpr (is_complex_v<T>) {
+          using xsimd::real;
+          return real(x);
+        } else {
+          return x;
+        }
+      }
+#endif
+    };
+
+    struct imag_f {
+      FORCEINLINE auto operator()(auto const &x) const { return detail::imag(x); }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires SimdPreservesLaneWidth<remove_complex_t<T>, T>
+      FORCEINLINE native_simd<remove_complex_t<T>> load(native_simd<T> const &x) const {
+        if constexpr (is_complex_v<T>) {
+          using xsimd::imag;
+          return imag(x);
+        } else {
+          return native_simd<T>(0);
+        }
+      }
+#endif
+    };
+
+    struct abs2_f {
+      FORCEINLINE auto operator()(auto const &x) const { return detail::abs2(x); }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires(std::same_as<remove_complex_t<T>, double> and SimdPreservesLaneWidth<double, T>)
+      FORCEINLINE native_simd<double> load(native_simd<T> const &x) const {
+        if constexpr (is_complex_v<T>) {
+          using xsimd::norm;
+          return norm(x);
+        } else {
+          return x * x;
+        }
+      }
+#endif
+    };
+
+    struct abs_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::abs;
+        return abs(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdSigned T>
+        requires PreservesScalarType<abs_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::abs(x);
+      }
+
+      template <SimdComplex T>
+        requires SimdPreservesLaneWidth<remove_complex_t<T>, T>
+      FORCEINLINE native_simd<remove_complex_t<T>> load(native_simd<T> const &x) const {
+        using xsimd::abs;
+        return abs(x);
+      }
+#endif
+    };
+
+    struct floor_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::floor;
+        return floor(x);
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdReal T>
+        requires PreservesScalarType<floor_f, T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return xsimd::floor(x);
+      }
+#endif
+    };
+
+    struct reciprocal_f {
+      FORCEINLINE auto operator()(auto const &x) const {
+        if constexpr (Scalar<std::remove_cvref_t<decltype(x)>>) {
+          return 1.0 / x;
+        } else {
+          return reciprocal(x); // nested arrays: nda::reciprocal, found by ADL at instantiation
+        }
+      }
+#ifdef NDA_HAVE_XSIMD
+      template <SimdRealOrComplex T>
+        requires(std::same_as<remove_complex_t<T>, double> and PreservesScalarType<reciprocal_f, T>)
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
+        return native_simd<T>(1) / x;
       }
 #endif
     };
@@ -81,19 +195,46 @@ namespace nda {
         return pow(x, exponent);
       }
 #ifdef NDA_HAVE_XSIMD
-      FORCEINLINE auto load(auto const &x) const {
+      template <SimdRealOrComplex T>
+        requires(std::same_as<remove_complex_t<T>, double> and PreservesScalarType<pow_f, T>)
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
         using xsimd::pow;
-        using simd_t = std::remove_cvref_t<decltype(x)>;
-        return pow(x, simd_t(exponent));
+        return pow(x, native_simd<T>(exponent));
       }
 #endif
     };
 
-    template <typename F>
-    struct unary_functor {
-      FORCEINLINE auto operator()(auto const &x) const { return F{}(x); }
-      FORCEINLINE auto load(auto const &x) const { return F{}(x); }
+    struct max_f {
+      FORCEINLINE auto operator()(auto const &x, auto const &y) const {
+        using std::max;
+        return max(x, y);
+      }
+
+#ifdef NDA_HAVE_XSIMD
+      template <SimdArithmetic T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x, native_simd<T> const &y) const {
+        using xsimd::max;
+        return max(x, y);
+      }
+#endif
     };
+
+    struct min_f {
+      FORCEINLINE auto operator()(auto const &x, auto const &y) const {
+        using std::min;
+        return min(x, y);
+      }
+
+#ifdef NDA_HAVE_XSIMD
+      template <SimdArithmetic T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x, native_simd<T> const &y) const {
+        using xsimd::min;
+        return min(x, y);
+      }
+#endif
+    };
+
+
   } // namespace detail
 
   /**
@@ -137,13 +278,7 @@ namespace nda {
    */
   template <ArrayOrScalar A>
   auto reciprocal(A &&a) {
-    return nda::map([](auto const &x) {
-      if constexpr (Scalar<decltype(x)>) {
-        return 1.0 / x;
-      } else {
-        return reciprocal(x);
-      }
-    })(std::forward<A>(a));
+    return nda::map(detail::reciprocal_f{})(std::forward<A>(a));
   }
 
   /**
@@ -156,13 +291,10 @@ namespace nda {
    * @return A lazy nda::expr_call object (nda::Array) or the result of `std::max` applied to the inputs (nda::Scalar).
    */
   template <ArrayOrScalar A, ArrayOrScalar B>
-    requires(((Scalar<A> && Scalar<B>) || (Array<A> && Array<B> && get_rank<A> == get_rank<B>))
-             && !is_complex_v<get_value_t<A>> && !is_complex_v<get_value_t<B>>)
+    requires(((Scalar<A> and Scalar<B>) or (Array<A> and Array<B> and get_rank<A> == get_rank<B>))
+             and not is_complex_v<get_value_t<A>> and not is_complex_v<get_value_t<B>>)
   [[nodiscard]] auto max(A &&a, B &&b) {
-    return nda::map([](auto const &x, auto const &y) {
-      using std::max;
-      return max(x, y);
-    })(std::forward<A>(a), std::forward<B>(b));
+    return nda::map(detail::max_f{})(std::forward<A>(a), std::forward<B>(b));
   }
 
   /**
@@ -175,13 +307,10 @@ namespace nda {
    * @return A lazy nda::expr_call object (nda::Array) or the result of `std::min` applied to the inputs (nda::Scalar).
    */
   template <ArrayOrScalar A, ArrayOrScalar B>
-    requires(((Scalar<A> && Scalar<B>) || (Array<A> && Array<B> && get_rank<A> == get_rank<B>))
-             && !is_complex_v<get_value_t<A>> && !is_complex_v<get_value_t<B>>)
+    requires(((Scalar<A> and Scalar<B>) or (Array<A> and Array<B> and get_rank<A> == get_rank<B>))
+             and not is_complex_v<get_value_t<A>> and not is_complex_v<get_value_t<B>>)
   [[nodiscard]] auto min(A &&a, B &&b) {
-    return nda::map([](auto const &x, auto const &y) {
-      using std::min;
-      return min(x, y);
-    })(std::forward<A>(a), std::forward<B>(b));
+    return nda::map(detail::min_f{})(std::forward<A>(a), std::forward<B>(b));
   }
 
   /** @} */

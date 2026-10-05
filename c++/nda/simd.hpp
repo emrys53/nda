@@ -4,7 +4,7 @@
 // See LICENSE in the root of this distribution for details.
 
 #pragma once
-#include "simd/simd_fwd.hpp"
 #include "simd/simd.hpp"
 #include "simd/mock_simd.hpp"
-#include "simd/simd_cost.hpp"
+#include "simd/simd_dispatch.hpp"
+#include "simd/simd_concepts.hpp"

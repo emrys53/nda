@@ -18,7 +18,7 @@
 #include "./mem/address_space.hpp"
 #include "./mem/policies.hpp"
 #include "./traits.hpp"
-#include "simd/simd_cost.hpp"
+#include "simd/simd_dispatch.hpp"
 
 #include <array>
 #include <cstddef>
@@ -429,9 +429,6 @@ namespace nda {
 
   template <typename F, Array... As>
   inline constexpr layout_info_t get_layout_info<expr_call<F, As...>> = (get_layout_info<As> & ...);
-
-  template <typename A, typename T = get_value_t<A>>
-  inline constexpr bool is_simd_enabled_v = std::is_same_v<simd::dispatch_policy_t<A, T>, simd::vectorize_t>;
 
 
   /** @} */

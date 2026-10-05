@@ -7,7 +7,6 @@
 
 #include <nda/nda.hpp>
 #include <nda/traits.hpp>
-#include <nda/simd/simd_cost.hpp>
 
 #include <complex>
 #include <vector>
@@ -110,9 +109,6 @@ TEST(NDA, TraitsNDASpecific) {
   static_assert(nda::have_same_value_type_v<int, nda::vector<int>, nda::array_view<int, 2>>);
   static_assert(not nda::have_same_value_type_v<int, nda::vector<double>, nda::array_view<int, 2>>);
 
-  static_assert(nda::have_same_value_type_v<int, nda::vector<int>, nda::array_view<int, 2>>);
-  static_assert(not nda::have_same_value_type_v<int, nda::vector<double>, nda::array_view<int, 2>>);
-
   static_assert(nda::have_same_rank_v<nda::array<int, 2>, nda::array<double, 2>, nda::matrix<int>>);
   static_assert(not nda::have_same_rank_v<nda::array<int, 2>, nda::array<double, 2>, nda::vector<int>>);
 
@@ -158,311 +154,259 @@ TEST(NDA, TraitsNDASpecific) {
   static_assert((cinfo & sinfo_2).stride_order == static_cast<uint64_t>(-1));
 }
 
-template <typename T, typename Layout1, typename Layout2>
-void check_all_simd_traits() {
-  using namespace nda;
-  using namespace nda::simd;
-  constexpr int Rank = 2;
-  std::array<long, Rank> shape;
-  shape.fill(64);
+// Copyright (c) 2023--present, The Simons Foundation
+// This file is part of TRIQS/nda and is licensed under the Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0
+// See LICENSE in the root of this distribution for details.
 
-  using A_t = array<T, Rank, Layout1>;
-  using B_t = array<T, Rank, Layout2>;
+#include "./test_common.hpp"
 
-  A_t A(shape);
-  B_t B(shape);
+#include <cstdint>
 
-  static_assert(has_same_layout<A_t>());
-  static_assert(has_same_layout<B_t>());
+using simd_types = ::testing::Types<std::int32_t, std::int64_t, std::uint32_t, std::uint64_t, float, double,
+                                  std::complex<float>, std::complex<double>>;
 
-  static_assert(has_vectorizable_type<A_t>());
-  static_assert(has_vectorizable_type<B_t>());
-
-  static_assert(has_load_function<A_t>());
-  static_assert(has_load_function<B_t>());
-
-  static_assert(is_simd_enabled_v<A_t>);
-  static_assert(is_simd_enabled_v<B_t>);
-
-  constexpr bool layouts_match = std::is_same_v<Layout1, Layout2>;
-
-  auto add_expr = A + B;
-  auto sub_expr = A - B;
-  auto mul_expr = A * B;
-  auto div_expr = A / B;
-
-  static_assert(has_same_layout<decltype(add_expr)>() == layouts_match);
-  static_assert(has_same_layout<decltype(sub_expr)>() == layouts_match);
-  static_assert(has_same_layout<decltype(mul_expr)>() == layouts_match);
-  static_assert(has_same_layout<decltype(div_expr)>() == layouts_match);
-
-  static_assert(has_vectorizable_type<decltype(add_expr)>());
-  static_assert(has_vectorizable_type<decltype(sub_expr)>());
-  static_assert(has_vectorizable_type<decltype(mul_expr)>());
-  static_assert(has_vectorizable_type<decltype(div_expr)>());
-
-  static_assert(has_load_function<decltype(add_expr)>());
-  static_assert(has_load_function<decltype(sub_expr)>());
-  static_assert(has_load_function<decltype(mul_expr)>());
-  static_assert(has_load_function<decltype(div_expr)>());
-
-  static_assert(has_same_layout<decltype(add_expr)>() == layouts_match);
-  static_assert(has_same_layout<decltype(sub_expr)>() == layouts_match);
-  static_assert(has_same_layout<decltype(mul_expr)>() == layouts_match);
-  static_assert(has_same_layout<decltype(div_expr)>() == layouts_match);
-
-  static_assert(is_simd_enabled_v<decltype(add_expr)> == layouts_match);
-  static_assert(is_simd_enabled_v<decltype(sub_expr)> == layouts_match);
-  static_assert(is_simd_enabled_v<decltype(mul_expr)> == layouts_match);
-  static_assert(is_simd_enabled_v<decltype(div_expr)> == layouts_match);
-
-  static_assert(has_same_layout<decltype(add_expr * sub_expr)>() == layouts_match);
-  static_assert(has_same_layout<decltype((sub_expr / div_expr) + mul_expr)>() == layouts_match);
-  static_assert(has_same_layout<decltype(mul_expr + mul_expr * add_expr)>() == layouts_match);
-  static_assert(has_same_layout<decltype(-(-div_expr + T{3}) * T{2})>() == layouts_match);
-
-  static_assert(has_vectorizable_type<decltype(add_expr * sub_expr)>());
-  static_assert(has_vectorizable_type<decltype((sub_expr / div_expr) + mul_expr)>());
-  static_assert(has_vectorizable_type<decltype(mul_expr + mul_expr * add_expr)>());
-  static_assert(has_vectorizable_type<decltype(-(-div_expr + T{3}) * T{2})>());
-
-  static_assert(has_load_function<decltype(add_expr * sub_expr)>());
-  static_assert(has_load_function<decltype((sub_expr / div_expr) + mul_expr)>());
-  static_assert(has_load_function<decltype(mul_expr + mul_expr * add_expr)>());
-  static_assert(has_load_function<decltype(-(-div_expr + T{3}) * T{2})>());
-
-  static_assert(is_simd_enabled_v<decltype(add_expr * sub_expr)> == layouts_match);
-  static_assert(is_simd_enabled_v<decltype((sub_expr / div_expr) + mul_expr)> == layouts_match);
-  static_assert(is_simd_enabled_v<decltype(mul_expr + mul_expr * add_expr)> == layouts_match);
-  static_assert(is_simd_enabled_v<decltype(-(-div_expr + T{3}) * T{2})> == layouts_match);
-
-  auto s_mul      = A * T{2};
-  auto s_mul_left = T{2} * A;
-
-  static_assert(has_same_layout<decltype(s_mul)>());
-  static_assert(has_same_layout<decltype(s_mul_left)>());
-
-  static_assert(has_vectorizable_type<decltype(s_mul)>());
-  static_assert(has_vectorizable_type<decltype(s_mul_left)>());
-
-  static_assert(has_load_function<decltype(s_mul)>());
-  static_assert(has_load_function<decltype(s_mul_left)>());
-
-  static_assert(is_simd_enabled_v<decltype(s_mul)>);
-  static_assert(is_simd_enabled_v<decltype(s_mul_left)>);
-
-  auto neg_expr = -A;
-  static_assert(has_same_layout<decltype(neg_expr)>());
-  static_assert(has_vectorizable_type<decltype(neg_expr)>());
-  static_assert(has_load_function<decltype(neg_expr)>());
-  static_assert(is_simd_enabled_v<decltype(neg_expr)>);
-
-  array<int16_t, Rank, Layout1> wrong(shape);
-  auto mixed_expr = A + wrong;
-
-  static_assert(has_same_layout<decltype(mixed_expr)>());
-  static_assert(has_same_layout<decltype(mixed_expr * add_expr)>() == layouts_match);
-  static_assert(has_same_layout<decltype(add_expr + mixed_expr - wrong)>() == layouts_match);
-
-  static_assert(!has_vectorizable_type<decltype(mixed_expr)>());
-  static_assert(!has_vectorizable_type<decltype(mixed_expr * add_expr)>());
-  static_assert(!has_vectorizable_type<decltype(add_expr + mixed_expr - wrong)>());
-
-  static_assert(!has_load_function<decltype(mixed_expr)>());
-  static_assert(!has_load_function<decltype(mixed_expr * add_expr)>());
-  static_assert(!has_load_function<decltype(add_expr + mixed_expr - wrong)>());
-
-  static_assert(!is_simd_enabled_v<decltype(mixed_expr)>);
-  static_assert(!is_simd_enabled_v<decltype(mixed_expr * add_expr)>);
-  static_assert(!is_simd_enabled_v<decltype(add_expr + mixed_expr - wrong)>);
-
-  auto V = A(range(0, 16), 0);
-  static_assert(has_same_layout<decltype(V)>());
-  static_assert(has_vectorizable_type<decltype(V)>());
-  static_assert(has_load_function<decltype(V)>());
-  static_assert(!is_simd_enabled_v<decltype(V)>); // Not contiguous
-  array<T, 1> slice_size(std::array<long, 1>{16});
-  auto sliced_expr = V + slice_size;
-  static_assert(has_same_layout<decltype(sliced_expr)>());
-  static_assert(has_vectorizable_type<decltype(sliced_expr)>());
-  static_assert(has_load_function<decltype(sliced_expr)>());
-  static_assert(!is_simd_enabled_v<decltype(sliced_expr)>);
-
-  // ─── Map functors ──────────────────────────────────────
-  struct no_load_f {
-    T operator()(T x, T y) const { return x + y; }
-  };
-  struct mock_only_f : simd::mock_simd<mock_only_f, T> {
-    T operator()(T x, T y) const { return x + y; }
-  };
-  struct native_simd_f {
-    T operator()(T x, T y) const { return x + y; }
-    native_simd<T> load(native_simd<T> x, native_simd<T> y) const { return x + y; }
-  };
-  struct wrong_sig_f {
-    T operator()(T x, T y) const { return x + y; }
-    T load(T x, T y) const { return x + y; }
-  };
-  struct bad_load_return_simd {
-    T operator()(T x, T y) const { return x + y; }
-    native_simd<T> load(T x, T y) const { return native_simd<T>{x + y}; }
-  };
-  struct bad_load_return_scalar {
-    T operator()(T x, T y) const { return x + y; }
-    T load(native_simd<T> x, native_simd<T> y) const { return (x + y).get(0); }
-  };
-
-  auto m1 = map(no_load_f{})(A, B);
-  static_assert(has_same_layout<decltype(m1)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(m1)>());
-  static_assert(!has_load_function<decltype(m1)>());
-  static_assert(!is_simd_enabled_v<decltype(m1)>);
-
-  auto m2 = map(mock_only_f{})(A, B);
-  static_assert(has_same_layout<decltype(m2)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(m2)>());
-  static_assert(has_load_function<decltype(m2)>());
-  static_assert(is_simd_enabled_v<decltype(m2)> == layouts_match);
-
-  auto m3 = map(native_simd_f{})(A, B);
-  static_assert(has_same_layout<decltype(m3)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(m3)>());
-  static_assert(has_load_function<decltype(m3)>());
-  static_assert(is_simd_enabled_v<decltype(m3)> == layouts_match);
-
-  auto m4 = map(wrong_sig_f{})(A, B);
-  static_assert(has_same_layout<decltype(m4)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(m4)>());
-  static_assert(!has_load_function<decltype(m4)>());
-  static_assert(!is_simd_enabled_v<decltype(m4)>);
-
-  auto m5 = map(bad_load_return_simd{})(A, B);
-  static_assert(has_same_layout<decltype(m5)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(m5)>());
-  static_assert(!has_load_function<decltype(m5)>());
-  static_assert(!is_simd_enabled_v<decltype(m5)>);
-
-  auto m6 = map(bad_load_return_scalar{})(A, B);
-  static_assert(has_same_layout<decltype(m6)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(m6)>());
-  static_assert(!has_load_function<decltype(m6)>());
-  static_assert(!is_simd_enabled_v<decltype(m6)>);
-
-  auto deep_map_expr = map(native_simd_f{})(A, B) + A * B - T{3} + add_expr;
-  static_assert(has_same_layout<decltype(deep_map_expr)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(deep_map_expr)>());
-  static_assert(has_load_function<decltype(deep_map_expr)>());
-  static_assert(is_simd_enabled_v<decltype(deep_map_expr)> == layouts_match);
-
-  auto broken_expr = map(native_simd_f{})(A, B) + map(no_load_f{})(A, B) + mul_expr;
-  static_assert(has_same_layout<decltype(broken_expr)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(broken_expr)>());
-  static_assert(!has_load_function<decltype(broken_expr)>());
-  static_assert(!is_simd_enabled_v<decltype(broken_expr)>);
-
-  auto mock_combined = map(mock_only_f{})(A, B) * T{2} - T{1};
-  static_assert(has_same_layout<decltype(mock_combined)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(mock_combined)>());
-  static_assert(has_load_function<decltype(mock_combined)>());
-  static_assert(is_simd_enabled_v<decltype(mock_combined)> == layouts_match);
-
-  auto map_then_slice = map(native_simd_f{})(A, B)(range(0, 16), 0);
-  static_assert(has_same_layout<decltype(map_then_slice)>());
-  static_assert(has_vectorizable_type<decltype(map_then_slice)>());
-  static_assert(has_load_function<decltype(map_then_slice)>());
-  static_assert(!is_simd_enabled_v<decltype(map_then_slice)>); // Not contiguous
-
-  // ─── Map applied to expressions ────────────────────────────────
-  auto map1 = map(no_load_f{})(add_expr, mul_expr);
-  static_assert(has_same_layout<decltype(map1)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(map1)>());
-  static_assert(!has_load_function<decltype(map1)>());
-  static_assert(!is_simd_enabled_v<decltype(map1)>);
-
-  auto map2 = map(wrong_sig_f{})(div_expr, B);
-  static_assert(has_same_layout<decltype(map2)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(map2)>());
-  static_assert(!has_load_function<decltype(map2)>());
-  static_assert(!is_simd_enabled_v<decltype(map2)>);
-
-  auto map3 = map(mock_only_f{})(A, sub_expr);
-  static_assert(has_same_layout<decltype(map3)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(map3)>());
-  static_assert(has_load_function<decltype(map3)>());
-  static_assert(is_simd_enabled_v<decltype(map3)> == layouts_match);
-
-  auto map4 = map(native_simd_f{})(add_expr, B);
-  static_assert(has_same_layout<decltype(map4)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(map4)>());
-  static_assert(has_load_function<decltype(map4)>());
-  static_assert(is_simd_enabled_v<decltype(map4)> == layouts_match);
-
-  auto m1_plus_mul = map(no_load_f{})(A, sub_expr) + mul_expr;
-  static_assert(has_same_layout<decltype(m1_plus_mul)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(m1_plus_mul)>());
-  static_assert(!has_load_function<decltype(m1_plus_mul)>());
-  static_assert(!is_simd_enabled_v<decltype(m1_plus_mul)>);
-
-  auto m2_times_div = map(wrong_sig_f{})(add_expr, A) * div_expr;
-  static_assert(has_same_layout<decltype(m2_times_div)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(m2_times_div)>());
-  static_assert(!has_load_function<decltype(m2_times_div)>());
-  static_assert(!is_simd_enabled_v<decltype(m2_times_div)>);
-
-  auto m3_plus_mul = map(mock_only_f{})(mul_expr, B) + sub_expr;
-  static_assert(has_same_layout<decltype(m3_plus_mul)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(m3_plus_mul)>());
-  static_assert(has_load_function<decltype(m3_plus_mul)>());
-  static_assert(is_simd_enabled_v<decltype(m3_plus_mul)> == layouts_match);
-
-  auto m4_plus_sub = map(native_simd_f{})(A, div_expr) + sub_expr;
-  static_assert(has_same_layout<decltype(m4_plus_sub)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(m4_plus_sub)>());
-  static_assert(has_load_function<decltype(m4_plus_sub)>());
-  static_assert(is_simd_enabled_v<decltype(m4_plus_sub)> == layouts_match);
-
-  auto m5_plus_add = map(bad_load_return_simd{})(add_expr, mul_expr) + A;
-  static_assert(has_same_layout<decltype(m5_plus_add)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(m5_plus_add)>());
-  static_assert(!has_load_function<decltype(m5_plus_add)>());
-  static_assert(!is_simd_enabled_v<decltype(m5_plus_add)>);
-
-  auto m6_plus_sub = map(bad_load_return_scalar{})(sub_expr, B) + div_expr;
-  static_assert(has_same_layout<decltype(m6_plus_sub)>() == layouts_match);
-  static_assert(has_vectorizable_type<decltype(m6_plus_sub)>());
-  static_assert(!has_load_function<decltype(m6_plus_sub)>());
-  static_assert(!is_simd_enabled_v<decltype(m6_plus_sub)>);
+template <typename T>
+void expect_simd_eq(T actual, T expected) {
+  if constexpr (nda::is_complex_v<T>) {
+    expect_simd_eq(actual.real(), expected.real());
+    expect_simd_eq(actual.imag(), expected.imag());
+  } else if constexpr (std::same_as<T, float>) {
+    EXPECT_FLOAT_EQ(actual, expected);
+  } else if constexpr (std::same_as<T, double>) {
+    EXPECT_DOUBLE_EQ(actual, expected);
+  } else {
+    EXPECT_EQ(actual, expected);
+  }
 }
 
-TEST(NDA, SIMD_TRAITS) {
 
-#define TEST_SIMD_TRAITS_FOR_LAYOUTS(type)                                                                                                           \
-  check_all_simd_traits<type, nda::C_layout, nda::C_layout>();                                                                                       \
-  check_all_simd_traits<type, nda::C_layout, nda::F_layout>();                                                                                       \
-  check_all_simd_traits<type, nda::F_layout, nda::C_layout>();                                                                                       \
-  check_all_simd_traits<type, nda::F_layout, nda::F_layout>();
+#include <nda/simd/mock_simd.hpp>
+#include <nda/simd/simd_dispatch.hpp>
 
-  TEST_SIMD_TRAITS_FOR_LAYOUTS(int32_t)
-  TEST_SIMD_TRAITS_FOR_LAYOUTS(int64_t)
-  TEST_SIMD_TRAITS_FOR_LAYOUTS(uint32_t)
-  TEST_SIMD_TRAITS_FOR_LAYOUTS(uint64_t)
-  TEST_SIMD_TRAITS_FOR_LAYOUTS(float)
-  TEST_SIMD_TRAITS_FOR_LAYOUTS(double)
-  TEST_SIMD_TRAITS_FOR_LAYOUTS(std::complex<float>)
-  TEST_SIMD_TRAITS_FOR_LAYOUTS(std::complex<double>)
+#include <vector>
 
-  using array_t = nda::array<std::vector<int>, 2>;
-  static_assert(nda::simd::has_same_layout<array_t>());
-  static_assert(!nda::simd::has_vectorizable_type<array_t>());
-  static_assert(!nda::simd::has_load_function<array_t>());
-  static_assert(!nda::is_simd_enabled_v<array_t>);
+using namespace nda;
 
-  using array_t2 = nda::array<float*, 3>;
-  static_assert(nda::simd::has_same_layout<array_t2>());
-  static_assert(!nda::simd::has_vectorizable_type<array_t2>());
-  static_assert(!nda::simd::has_load_function<array_t2>());
-  static_assert(!nda::is_simd_enabled_v<array_t2>);
+namespace {
 
+#ifdef NDA_HAVE_XSIMD
+  template <bool Loadable, bool Enabled, typename E>
+  void check_dispatch(E const &) {
+    static_assert(simd::has_load_function<E>() == Loadable);
+    static_assert(is_simd_enabled_v<E> == Enabled);
+  }
 
-#undef TEST_SIMD_TRAITS_FOR_LAYOUTS
+  template <typename T, typename Layout1, typename Layout2>
+  void check_traits() {
+    array<T, 2, Layout1> a(32, 32);
+    array<T, 2, Layout2> b(32, 32);
+    constexpr bool same_layout = std::same_as<Layout1, Layout2>;
+
+    check_dispatch<true, true>(a);
+    check_dispatch<true, true>(b);
+    check_dispatch<true, same_layout>(a + b);
+    check_dispatch<true, same_layout>(a - b);
+    check_dispatch<true, same_layout>(a * b);
+    check_dispatch<true, same_layout>(a / b);
+    check_dispatch<true, same_layout>((a + b) * (a - b));
+    check_dispatch<true, same_layout>((a - b) / (a / b) + a * b);
+    check_dispatch<true, same_layout>(a * b + a * b * (a + b));
+    check_dispatch<true, same_layout>(-(-(a / b) + T{3}) * T{2});
+    check_dispatch<true, true>(a * T{2});
+    check_dispatch<true, true>(T{2} * a);
+    check_dispatch<true, true>(-a);
+
+    // Mixed array value types cannot be loaded as the result's native batch.
+    array<std::int16_t, 2, Layout1> narrow(32, 32);
+    check_dispatch<false, false>(a + narrow);
+    check_dispatch<false, false>((a + narrow) * (a + b));
+    check_dispatch<false, false>(a + b + (a + narrow) - narrow);
+    static_assert(not simd::has_load_function<decltype(a), std::int16_t>());
+
+    auto slice = a(range(0, 16), 0);
+    check_dispatch<true, false>(slice);
+    check_dispatch<true, false>(slice + array<T, 1>(16));
+
+    struct scalar_f {
+      T operator()(T x, T y) const { return x + y; }
+    };
+    struct mock_f : simd::mock_simd<mock_f, T> {
+      T operator()(T x, T y) const { return x + y; }
+    };
+    struct native_f : scalar_f {
+      native_simd<T> load(native_simd<T> x, native_simd<T> y) const { return x + y; }
+    };
+    struct scalar_load_f : scalar_f {
+      T load(T x, T y) const { return x + y; }
+    };
+    struct wrong_args_f : scalar_f {
+      native_simd<T> load(T x, T y) const { return native_simd<T>{x + y}; }
+    };
+    struct wrong_result_f : scalar_f {
+      T load(native_simd<T> x, native_simd<T> y) const { return (x + y).get(0); }
+    };
+
+    // Each signature is checked alone, inside arithmetic, and with expression arguments.
+    auto check_map = [&]<typename F, bool Loadable>() {
+      auto mapped = map(F{})(a, b);
+      check_dispatch<Loadable, Loadable and same_layout>(mapped);
+      check_dispatch<Loadable, Loadable and same_layout>(mapped + a * b);
+      check_dispatch<Loadable, Loadable and same_layout>(map(F{})(a + b, a * b));
+    };
+    check_map.template operator()<scalar_f, false>();
+    check_map.template operator()<mock_f, true>();
+    check_map.template operator()<native_f, true>();
+    check_map.template operator()<scalar_load_f, false>();
+    check_map.template operator()<wrong_args_f, false>();
+    check_map.template operator()<wrong_result_f, false>();
+
+    check_dispatch<true, same_layout>(map(native_f{})(a, b) + a * b - T{3} + a + b);
+    check_dispatch<false, false>(map(native_f{})(a, b) + map(scalar_f{})(a, b) + a * b);
+    check_dispatch<false, false>(map(native_f{})(map(scalar_f{})(a, b), a));
+    check_dispatch<true, same_layout>(map(mock_f{})(a, b) * T{2} - T{1});
+    check_dispatch<true, false>(map(native_f{})(a, b)(range(0, 16), 0));
+  }
+#endif
+
+  template <typename T, typename Layout>
+  void check_flat_loop() {
+    using matrix_t = matrix<T, Layout>;
+    constexpr long n = [] {
+#ifdef NDA_HAVE_XSIMD
+      if constexpr (Vectorizable<T>) {
+        return long(2 * native_simd<T>::size + 3);
+      }
+#endif
+      return 19L;
+    }();
+    matrix_t m(n, n), other(n, n), result(n, n);
+    for (long i = 0; i < n; ++i) {
+      for (long j = 0; j < n; ++j) {
+        m(i, j) = T(1 + i + 10 * j);
+        other(i, j) = T(2 * i - j);
+      }
+    }
+    const T scalar{3};
+
+    static_assert(std::is_base_of_v<std::false_type, supports_flat_loop<T>>);
+    static_assert(std::is_base_of_v<std::true_type, supports_flat_loop<matrix_t>>);
+    static_assert(not supports_flat_loop_v<T>);
+    static_assert(not supports_flat_loop_v<int>);
+    static_assert(supports_flat_loop_v<decltype(m(range::all, 0))>);
+    static_assert(supports_flat_loop_v<matrix_t>);
+    static_assert(supports_flat_loop_v<decltype(m + other)>);
+    static_assert(supports_flat_loop_v<decltype(scalar * m - other)>);
+    static_assert(supports_flat_loop_v<decltype(-(m + other))>);
+    static_assert(supports_flat_loop_v<decltype(abs(m + other))>);
+    static_assert(supports_flat_loop_v<decltype(scalar * m)>);
+    static_assert(not supports_flat_loop_v<decltype(m + scalar)>);
+    static_assert(not supports_flat_loop_v<decltype(scalar - m)>);
+    static_assert(not supports_flat_loop_v<decltype(m + (m + (m + scalar) + scalar))>);
+    static_assert(not supports_flat_loop_v<decltype(scalar * (m - scalar))>);
+    static_assert(not supports_flat_loop_v<decltype(-(m + scalar))>);
+    static_assert(not supports_flat_loop_v<decltype(abs(m + scalar))>);
+
+    auto check = [&](auto const &expression, auto expected) {
+      result = expression;
+      for (long i = 0; i < n; ++i) {
+        for (long j = 0; j < n; ++j) { expect_simd_eq(result(i, j), T(expected(i, j))); }
+      }
+    };
+    check(m + other, [&](long i, long j) { return m(i, j) + other(i, j); });
+    check(scalar * m - other, [&](long i, long j) { return scalar * m(i, j) - other(i, j); });
+    check(m + scalar, [&](long i, long j) { return m(i, j) + (i == j ? scalar : T{0}); });
+    check(scalar - m, [&](long i, long j) { return (i == j ? scalar : T{0}) - m(i, j); });
+    check(m + (m + (m + scalar) + scalar), [&](long i, long j) { return T{3} * m(i, j) + (i == j ? T{2} * scalar : T{0}); });
+
+    // Rectangular matrices only add/subtract the scalar on the shorter diagonal.
+    matrix_t rectangular(n, n + 5), out(n, n + 5);
+    for (long i = 0; i < n; ++i) {
+      for (long j = 0; j < n + 5; ++j) { rectangular(i, j) = T(i - j); }
+    }
+    out = rectangular - scalar;
+    for (long i = 0; i < n; ++i) {
+      for (long j = 0; j < n + 5; ++j) { expect_simd_eq(out(i, j), T(rectangular(i, j) - (i == j ? scalar : T{0}))); }
+    }
+  }
+
+} // namespace
+
+#ifdef NDA_HAVE_XSIMD
+template <typename T>
+class SIMDDispatch : public ::testing::Test {};
+
+TYPED_TEST_SUITE(SIMDDispatch, simd_types);
+
+TYPED_TEST(SIMDDispatch, Traits) {
+  check_traits<TypeParam, C_layout, C_layout>();
+  check_traits<TypeParam, C_layout, F_layout>();
+  check_traits<TypeParam, F_layout, C_layout>();
+  check_traits<TypeParam, F_layout, F_layout>();
+}
+#endif
+
+TEST(SIMD, UnsupportedTypes) {
+  static_assert(not simd::has_load_function<array<std::vector<int>, 2>>());
+  static_assert(not is_simd_enabled_v<array<std::vector<int>, 2>>);
+  static_assert(not simd::has_load_function<array<float *, 3>>());
+  static_assert(not is_simd_enabled_v<array<float *, 3>>);
+  static_assert(not is_simd_enabled_v<float>);
+#ifndef NDA_HAVE_XSIMD
+  static_assert(not is_simd_enabled_v<array<double, 1>>);
+  static_assert(not is_simd_enabled_v<decltype(abs(std::declval<array<std::complex<double>, 1> &>()))>);
+#endif
+}
+
+TEST(SIMD, ScalarBroadcast) {
+  array<float, 2> a(5, 7);
+  a = 1.5f;
+#ifdef NDA_HAVE_XSIMD
+  static_assert(is_simd_enabled_v<decltype(a * 2)>);
+  static_assert(is_simd_enabled_v<decltype(2 + a)>);
+  static_assert(is_simd_enabled_v<decltype(a - 1)>);
+  static_assert(not is_simd_enabled_v<decltype(a + 1.0)>);
+#endif
+  array<float, 2> result = a * 2 - 1;
+  for (long i = 0; i < 5; ++i) {
+    for (long j = 0; j < 7; ++j) { EXPECT_EQ(result(i, j), a(i, j) * 2 - 1); }
+  }
+  matrix<float> m(5, 7), out(5, 7);
+  for (long i = 0; i < 5; ++i) {
+    for (long j = 0; j < 7; ++j) { m(i, j) = 1.5f; }
+  }
+  out = m + 1;
+  for (long i = 0; i < 5; ++i) {
+    for (long j = 0; j < 7; ++j) { EXPECT_EQ(out(i, j), i == j ? 2.5f : 1.5f); }
+  }
+}
+
+TEST(SIMD, ScalarTree) {
+  array<float, 2> a(5, 7), b(5, 7), c(5, 7);
+  auto native = a + b + c;
+  auto scalar = map([](auto const &x) { return x * x; })(native + a);
+  auto negated = -scalar;
+  auto scaled = 5.0f * (negated + 5.0f);
+  auto mapped = map([](auto const &x, auto const &y) { return x - y; })(scaled + scaled, scalar);
+#ifdef NDA_HAVE_XSIMD
+  static_assert(is_simd_enabled_v<decltype(native)>);
+#else
+  static_assert(not is_simd_enabled_v<decltype(native)>);
+#endif
+  static_assert(not is_simd_enabled_v<decltype(scalar)>);
+  static_assert(not is_simd_enabled_v<decltype(negated)>);
+  static_assert(not is_simd_enabled_v<decltype(scaled)>);
+  static_assert(not is_simd_enabled_v<decltype(mapped)>);
+  static_assert(not is_simd_enabled_v<decltype(log(mapped))>);
+}
+
+TEST(SIMD, FlatLoop) {
+  check_flat_loop<float, C_layout>();
+  check_flat_loop<float, F_layout>();
+  check_flat_loop<double, C_layout>();
+  check_flat_loop<double, F_layout>();
+  check_flat_loop<std::int32_t, C_layout>();
+  check_flat_loop<std::int64_t, F_layout>();
+  check_flat_loop<std::complex<double>, C_layout>();
+  check_flat_loop<std::complex<double>, F_layout>();
 }
