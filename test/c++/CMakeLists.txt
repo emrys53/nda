@@ -26,9 +26,8 @@ if(NOT TblisSupport)
   list(FILTER all_tests EXCLUDE REGEX "tblis")
 endif()
 if(NOT SIMDSupport)
-  # nda_simd is a pure SIMD test; nda_traits mixes general traits with SIMD-trait
-  # static_asserts that reference native_simd/mock_simd. Both still run in the ON build.
-  list(FILTER all_tests EXCLUDE REGEX "nda_simd|nda_traits")
+  # Direct batch loads require xsimd; dispatch, map fallbacks and general traits still run.
+  list(FILTER all_tests EXCLUDE REGEX "nda_simd_load")
 endif()
 
 macro(SetUpAllTestWithMacroDef extension macrodef)
