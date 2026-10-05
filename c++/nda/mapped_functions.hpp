@@ -234,7 +234,16 @@ namespace nda {
 #endif
     };
 
+    struct mul_f {
+      FORCEINLINE auto operator()(auto const &x, auto const &y) const { return x * y; }
 
+#ifdef NDA_HAVE_XSIMD
+      template <Vectorizable T>
+      FORCEINLINE native_simd<T> load(native_simd<T> const &x, native_simd<T> const &y) const {
+        return x * y;
+      }
+#endif
+    };
   } // namespace detail
 
   /**

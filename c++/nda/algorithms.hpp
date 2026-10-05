@@ -16,6 +16,7 @@
 #include "./layout/range.hpp"
 #include "./macros.hpp"
 #include "./map.hpp"
+#include "./mapped_functions.hpp"
 #include "./simd/simd_dispatch.hpp"
 #include "./traits.hpp"
 
@@ -71,19 +72,7 @@ namespace nda {
     return fold(std::move(f), a, get_value_t<A>{});
   }
 
-  //TODO: Maybe add another fold function that can interact with SIMD types.
-//  template <Array A, typename F_SIMD, typename F_SCALAR, Vectorizable R>
-//    requires(std::is_same_v<simd::dispatch_policy_t<A, R>, simd::vectorize_t> or std::is_same_v<simd::dispatch_policy_t<A, R>, simd::emulate_t>)
-//  auto fold(F_SIMD f_simd, F_SCALAR f_scalar, A const &a, native_simd<R> r_simd, R r_scalar) {
-//    nda::for_each_static<0, get_layout_info<A>.stride_order, native_simd<R>::size>(
-//       a.shape(),
-//       [&a, &r_simd, &f_simd](auto &&...args) { r_simd = f_simd(r_simd, native_simd<R>(a.load(simd::dispatch_policy_t<A, R>{}, args...))); },
-//       [&a, &r_scalar, &f_scalar](auto &&...args) { r_scalar = f_scalar(r_scalar, a(args...)); });
-//    alignas(native_simd<R>::arch_type::alignment()) std::array<R, r_simd.size()> res;
-//    r_simd.store(res.data());
-//    for (int i = 0; i < r_simd.size(); i++) { r_scalar = f_scalar(r_scalar, res[i]); }
-//    return r_scalar;
-//  }
+  // TODO: add a fold that accumulates in SIMD batches.
 
   /**
    * @brief Does any of the elements of the array evaluate to true?
@@ -127,6 +116,37 @@ namespace nda {
     return fold([](bool r, auto const &x) -> bool { return r and bool(x); }, a, true);
   }
 
+#ifdef NDA_HAVE_XSIMD
+  namespace detail {
+    // Reduce all elements of a SIMD-enabled array with `op` (combines two batches as well as two scalars) and fold the
+    // lanes of the final batch with `reduce`. The flat loop keeps four accumulators to hide the latency of the chain.
+    template <Array A, typename T, typename Op, typename Reduce>
+    auto simd_reduce(A const &a, T init, Op op, Reduce reduce) {
+      using simd_t = native_simd<T>;
+      simd_t acc(init);
+      T r = init;
+      if constexpr (supports_flat_loop_v<A>) {
+        constexpr auto w = simd_t::size;
+        const auto n     = a.size();
+        long k           = 0;
+        simd_t acc1 = acc, acc2 = acc, acc3 = acc;
+        for (; k + 4 * w <= n; k += 4 * w) {
+          acc  = op(acc, a.load(_linear_index_t{k}));
+          acc1 = op(acc1, a.load(_linear_index_t{k + w}));
+          acc2 = op(acc2, a.load(_linear_index_t{k + 2 * w}));
+          acc3 = op(acc3, a.load(_linear_index_t{k + 3 * w}));
+        }
+        acc = op(op(acc, acc1), op(acc2, acc3));
+        for (; k + w <= n; k += w) { acc = op(acc, a.load(_linear_index_t{k})); }
+        for (; k < n; ++k) { r = op(r, a(_linear_index_t{k})); }
+      } else {
+        nda::for_each_simd([&](auto const &...i) { acc = op(acc, a.load(i...)); }, [&](auto const &...i) { r = op(r, a(i...)); }, a);
+      }
+      return op(r, reduce(acc));
+    }
+  } // namespace detail
+#endif // NDA_HAVE_XSIMD
+
   /**
    * @brief Find the maximum element of an array.
    *
@@ -138,32 +158,14 @@ namespace nda {
    */
   template <Array A>
   auto max_element(A const &a) {
+    auto max_f = [](auto const &x, auto const &y) {
+      using std::max;
+      return max(x, y);
+    };
 #ifdef NDA_HAVE_XSIMD
-    if constexpr (not is_simd_enabled_v<A>) {
-      return fold(
-         [](auto const &x, auto const &y) {
-           using std::max;
-           return max(x, y);
-         },
-         a, get_first_element(a));
-    } else {
-      using value_t = get_value_t<A>;
-      using simd_t  = native_simd<value_t>;
-      simd_t max_simd(get_first_element(a));
-      auto f_simd        = [&a, &max_simd](auto &&...args) { max_simd = xsimd::max(max_simd, a.load(args...)); };
-      value_t max_scalar = get_first_element(a);
-      auto f_scalar      = [&a, &max_scalar](auto &&...args) { max_scalar = std::max(max_scalar, a(args...)); };
-      nda::for_each_static<0, get_layout_info<A>.stride_order, simd_t::size>(a.shape(), std::move(f_simd), std::move(f_scalar));
-      return std::max(max_scalar, xsimd::reduce_max(max_simd));
-    }
-#else
-    return fold(
-       [](auto const &x, auto const &y) {
-         using std::max;
-         return max(x, y);
-       },
-       a, get_first_element(a));
+    if constexpr (is_simd_enabled_v<A>) { return detail::simd_reduce(a, get_first_element(a), max_f, [](auto const &b) { return xsimd::reduce_max(b); }); }
 #endif
+    return fold(max_f, a, get_first_element(a));
   }
 
   /**
@@ -177,32 +179,14 @@ namespace nda {
    */
   template <Array A>
   auto min_element(A const &a) {
+    auto min_f = [](auto const &x, auto const &y) {
+      using std::min;
+      return min(x, y);
+    };
 #ifdef NDA_HAVE_XSIMD
-    if constexpr (not is_simd_enabled_v<A>) {
-      return fold(
-         [](auto const &x, auto const &y) {
-           using std::min;
-           return min(x, y);
-         },
-         a, get_first_element(a));
-    } else {
-      using value_t = get_value_t<A>;
-      using simd_t  = native_simd<value_t>;
-      simd_t min_simd(get_first_element(a));
-      auto f_simd        = [&a, &min_simd](auto &&...args) { min_simd = xsimd::min(min_simd, a.load(args...)); };
-      value_t min_scalar = get_first_element(a);
-      auto f_scalar      = [&a, &min_scalar](auto &&...args) { min_scalar = std::min(min_scalar, a(args...)); };
-      nda::for_each_static<0, get_layout_info<A>.stride_order, simd_t::size>(a.shape(), std::move(f_simd), std::move(f_scalar));
-      return std::min(min_scalar, xsimd::reduce_min(min_simd));
-    }
-#else
-    return fold(
-       [](auto const &x, auto const &y) {
-         using std::min;
-         return min(x, y);
-       },
-       a, get_first_element(a));
+    if constexpr (is_simd_enabled_v<A>) { return detail::simd_reduce(a, get_first_element(a), min_f, [](auto const &b) { return xsimd::reduce_min(b); }); }
 #endif
+    return fold(min_f, a, get_first_element(a));
   }
 
   /**
@@ -213,40 +197,36 @@ namespace nda {
    * @param a Array object.
    * @return Frobenius norm of the array/matrix.
    */
-  template <ArrayOfRank<2> A>
+template <ArrayOfRank<2> A>
   double frobenius_norm(A const &a) {
 #ifdef NDA_HAVE_XSIMD
-    if constexpr (not is_simd_enabled_v<A> or is_complex_v<get_value_t<A>>) {
-      return std::sqrt(fold(
-         [](double r, auto const &x) -> double {
-           auto abs = std::abs(x);
-           return xsimd::fma(abs, abs, r);
-         },
-         a, double(0)));
+    using value_t    = get_value_t<A>;
+    if constexpr (not is_simd_enabled_v<A> or sizeof(remove_complex_t<value_t>) < 4) {
+      return std::sqrt(fold([](double r, auto const &x) -> double { return r + static_cast<double>(std::norm(x)); }, a, double(0)));
     } else {
-      using value_t = get_value_t<A>;
-      using simd_t  = native_simd<value_t>;
-      simd_t r_simd(value_t(0));
+      using simd_t = native_simd<value_t>;
+      using acc_real_t = std::conditional_t<sizeof(remove_complex_t<value_t>) == 4, float, double>;
+      using acc_t      = native_simd<acc_real_t>;
+      acc_t r_simd(0);
       auto f_simd = [&a, &r_simd](auto &&...args) {
-        simd_t x   = a.load(args...);
-        simd_t abs = xsimd::abs(x);
-        r_simd     = xsimd::fma(abs, abs, r_simd);
+        simd_t const x = a.load(args...);
+        if constexpr (is_complex_v<value_t>) {
+          r_simd += xsimd::norm(x); // |z|^2 as a real batch
+        } else if constexpr (std::is_floating_point_v<value_t>) {
+          r_simd = xsimd::fma(x, x, r_simd);
+        } else {
+          // integer lanes -> floating-point lanes of the same width
+          auto const d = xsimd::batch_cast<acc_real_t>(x);
+          r_simd       = xsimd::fma(d, d, r_simd);
+        }
       };
       double r      = 0;
-      auto f_scalar = [&a, &r](auto &&...args) {
-        auto abs = std::abs(a(args...));
-        r        = xsimd::fma(abs, abs, r);
-      };
-      nda::for_each_static<0, get_layout_info<A>.stride_order, simd_t::size>(a.shape(), std::move(f_simd), std::move(f_scalar));
-      return std::sqrt((static_cast<double>(xsimd::reduce_add(r_simd)) + r));
+      auto f_scalar = [&a, &r](auto &&...args) { r += static_cast<double>(std::norm(a(args...))); };
+      nda::for_each_simd(std::move(f_simd), std::move(f_scalar), a);
+      return std::sqrt(static_cast<double>(xsimd::reduce_add(r_simd)) + r);
     }
 #else
-    return std::sqrt(fold(
-       [](double r, auto const &x) -> double {
-         auto ab = std::abs(x);
-         return r + ab * ab;
-       },
-       a, double(0)));
+      return std::sqrt(fold([](double r, auto const &x) -> double { return r + static_cast<double>(std::norm(x)); }, a, double(0)));
 #endif
   }
 
@@ -263,21 +243,9 @@ namespace nda {
   {
     if constexpr (nda::Scalar<Value>) {
 #ifdef NDA_HAVE_XSIMD
-      if constexpr (not is_simd_enabled_v<A>) {
-        return fold(std::plus<>{}, a);
-      } else {
-        using value_t = get_value_t<A>;
-        using simd_t  = native_simd<value_t>;
-        simd_t sum_simd(value_t{0});
-        auto f_simd = [&a, &sum_simd](auto &&...args) { sum_simd += a.load(args...); };
-        value_t sum_scalar{0};
-        auto f_scalar = [&a, &sum_scalar](auto &&...args) { sum_scalar += a(args...); };
-        nda::for_each_static<0, get_layout_info<A>.stride_order, simd_t::size>(a.shape(), std::move(f_simd), std::move(f_scalar));
-        return sum_scalar + xsimd::reduce_add(sum_simd);
-      }
-#else
-      return fold(std::plus<>{}, a);
+      if constexpr (is_simd_enabled_v<A>) { return detail::simd_reduce(a, Value{0}, std::plus<>{}, [](auto const &b) { return xsimd::reduce_add(b); }); }
 #endif
+      return fold(std::plus<>{}, a);
     } else {
       // Array<Value>
       return fold(std::plus<>{}, a, Value::zeros(get_first_element(a).shape()));
@@ -372,21 +340,9 @@ namespace nda {
   {
     if constexpr (nda::Scalar<Value>) {
 #ifdef NDA_HAVE_XSIMD
-      if constexpr (not is_simd_enabled_v<A>) {
-        return fold(std::multiplies<>{}, a, get_value_t<A>{1});
-      } else {
-        using value_t = get_value_t<A>;
-        using simd_t  = native_simd<value_t>;
-        simd_t product_simd(value_t{1});
-        auto f_simd = [&a, &product_simd](auto &&...args) { product_simd *= a.load(args...); };
-        value_t product_scalar{1};
-        auto f_scalar = [&a, &product_scalar](auto &&...args) { product_scalar *= a(args...); };
-        nda::for_each_static<0, get_layout_info<A>.stride_order, simd_t::size>(a.shape(), std::move(f_simd), std::move(f_scalar));
-        return product_scalar * xsimd::reduce_mul(product_simd);
-      }
-#else
-      return fold(std::multiplies<>{}, a, get_value_t<A>{1});
+      if constexpr (is_simd_enabled_v<A>) { return detail::simd_reduce(a, Value{1}, std::multiplies<>{}, [](auto const &b) { return xsimd::reduce_mul(b); }); }
 #endif
+      return fold(std::multiplies<>{}, a, Value{1});
     } else {
       // Array<Value>
       return fold(std::multiplies<>{}, a, Value::ones(get_first_element(a).shape()));
@@ -405,21 +361,7 @@ namespace nda {
   template <Array A, Array B>
     requires(nda::get_rank<A> == nda::get_rank<B>)
   [[nodiscard]] constexpr auto hadamard(A &&a, B &&b) {
-#ifdef NDA_HAVE_XSIMD
-    if constexpr (is_simd_enabled_v<A> and is_simd_enabled_v<B> and std::is_same_v<get_value_t<A>, get_value_t<B>>) {
-      using value_t = get_value_t<A>;
-      using simd_t  = native_simd<value_t>;
-      struct mul {
-        value_t operator()(const value_t &x, const value_t &y) const { return x * y; }
-        simd_t load(const simd_t &x, const simd_t &y) const { return x * y; };
-      };
-      return nda::map(mul{})(std::forward<A>(a), std::forward<B>(b));
-    } else {
-      return nda::map([](auto const &x, auto const &y) { return x * y; })(std::forward<A>(a), std::forward<B>(b));
-    }
-#else
-    return nda::map([](auto const &x, auto const &y) { return x * y; })(std::forward<A>(a), std::forward<B>(b));
-#endif
+    return nda::map(detail::mul_f{})(std::forward<A>(a), std::forward<B>(b));
   }
 
   /**
