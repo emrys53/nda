@@ -264,14 +264,25 @@ FORCEINLINE decltype(auto) operator()(Ts const &...idxs) && noexcept(has_no_boun
 
 #ifdef NDA_HAVE_XSIMD
 private:
-// batches use the plain value type (views of const arrays have ValueType = const T)
 using native_simd_t = native_simd<std::remove_const_t<ValueType>>;
 
-void assert_simd_access_bounds(const long offset) const noexcept(has_no_boundcheck) {
-  static_assert(has_contiguous_layout<self_t>, "SIMD access requires a contiguous layout");
+template <typename... Args>
+void assert_simd_access_bounds(Args const &...idx) const noexcept(has_no_boundcheck) {
+  static_assert(has_layout_smallest_stride_is_one<self_t>, "SIMD access requires a contiguous fastest dimension");
   static_assert(Vectorizable<ValueType>, "SIMD access requires a vectorizable value type");
   if constexpr (!has_no_boundcheck) {
-    if (offset + native_simd_t::size > this->size()) { NDA_RUNTIME_ERROR << "Index out of bounds for SIMD access."; }
+    constexpr auto width = native_simd_t::size;
+    if constexpr (sizeof...(Args) == 1 and (std::is_same_v<Args, _linear_index_t> and ...)) {
+      long const k = (idx.value, ...);
+      if (k < 0 or k + width > size()) NDA_RUNTIME_ERROR << "SIMD block out of bounds: linear index " << k;
+    } else {
+      static_assert(sizeof...(Args) == rank, "SIMD access needs one index per dimension");
+      nda::assert_in_bounds(rank, lay.lengths().data(), idx...);
+      constexpr int fastest = layout_t::stride_order[rank - 1];
+      std::array<long, rank> const i{long(idx)...};
+      if (i[fastest] + width > lay.lengths()[fastest])
+        NDA_RUNTIME_ERROR << "SIMD block out of bounds: index " << i[fastest] << " in a dimension of length " << lay.lengths()[fastest];
+    }
   }
 }
 
@@ -279,26 +290,28 @@ public:
 template <typename... Args>
 FORCEINLINE native_simd_t load(Args... idx) const noexcept(has_no_boundcheck) {
   const long offset = lay(idx...);
-  assert_simd_access_bounds(offset);
+  assert_simd_access_bounds(idx...);
   return native_simd_t::load_unaligned(data() + offset);
 }
 
 template <typename... Args>
 FORCEINLINE void store(const native_simd_t &value, Args... idx) noexcept(has_no_boundcheck) {
   const long offset = lay(idx...);
-  assert_simd_access_bounds(offset);
+  assert_simd_access_bounds(idx...);
   value.store_unaligned(data() + offset);
 }
 
 /// SIMD load at a linear index (contiguous layouts only): the index is the offset, no index arithmetic.
 FORCEINLINE native_simd_t load(_linear_index_t idx) const noexcept(has_no_boundcheck) {
-  assert_simd_access_bounds(idx.value);
+  static_assert(has_contiguous_layout<self_t>, "Linear index SIMD access requires a contiguous layout");
+  assert_simd_access_bounds(idx);
   return native_simd_t::load_unaligned(data() + idx.value);
 }
 
 /// SIMD store at a linear index (contiguous layouts only), see load(_linear_index_t).
 FORCEINLINE void store(const native_simd_t &value, _linear_index_t idx) noexcept(has_no_boundcheck) {
-  assert_simd_access_bounds(idx.value);
+  static_assert(has_contiguous_layout<self_t>, "Linear index SIMD access requires a contiguous layout");
+  assert_simd_access_bounds(idx);
   value.store_unaligned(data() + idx.value);
 }
 #endif // NDA_HAVE_XSIMD
