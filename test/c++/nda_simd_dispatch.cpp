@@ -234,3 +234,132 @@ TEST(SIMD, FlatLoop) {
   check_flat_loop<std::complex<double>, C_layout>();
   check_flat_loop<std::complex<double>, F_layout>();
 }
+
+#ifdef NDA_HAVE_XSIMD
+namespace {
+
+  template <typename T, typename Layout>
+  void check_row_contiguous_views() {
+    constexpr long lanes = native_simd<T>::size;
+    for (long n : {lanes - 1, 2 * lanes + 3}) {
+      array<T, 3, Layout> t(n, 3, n), other(n, 3, n), full(n, 3, n);
+      for (long i = 0; i < n; ++i) {
+        for (long j = 0; j < 3; ++j) {
+          for (long k = 0; k < n; ++k) {
+            t(i, j, k)     = T(1 + i + 10 * k);
+            other(i, j, k) = T(2 * i - k);
+            full(i, j, k)  = T(-1);
+          }
+        }
+      }
+      auto tv = t(range::all, 1, range::all);
+      auto ov = other(range::all, 1, range::all);
+      auto fv = full(range::all, 1, range::all);
+      array<T, 2, Layout> c(n, n), result(n, n);
+      c = T(3);
+
+      static_assert(not has_contiguous_layout<decltype(tv)>);
+      static_assert(has_layout_smallest_stride_is_one<decltype(tv)>);
+      static_assert(supports_flat_loop_v<decltype(tv)>);
+      check_dispatch<true, true>(tv);
+      check_dispatch<true, true>(tv * ov + tv);
+      check_dispatch<true, true>(tv + c);
+      check_dispatch<true, true>(-(tv - ov) * T{2});
+      check_dispatch<true, true>(abs(tv));
+      if constexpr (array<T, 3, Layout>::layout_t::is_stride_order_C()) {
+        check_dispatch<true, false>(t(range::all, range::all, 1));
+      } else {
+        check_dispatch<true, false>(t(1, range::all, range::all));
+      }
+
+      auto check = [&](auto const &expression, auto expected) {
+        fv = expression;
+        for (long i = 0; i < n; ++i) {
+          for (long k = 0; k < n; ++k) {
+            expect_simd_eq(full(i, 1, k), T(expected(i, k)));
+            expect_simd_eq(full(i, 0, k), T(-1));
+            expect_simd_eq(full(i, 2, k), T(-1));
+          }
+        }
+      };
+      check(tv * ov + tv, [&](long i, long k) { return t(i, 1, k) * other(i, 1, k) + t(i, 1, k); });
+      check(tv + c, [&](long i, long k) { return t(i, 1, k) + T(3); });
+      check(-(tv - ov) * T{2}, [&](long i, long k) { return -(t(i, 1, k) - other(i, 1, k)) * T{2}; });
+
+      result = tv - ov;
+      T total{};
+      for (long i = 0; i < n; ++i) {
+        for (long k = 0; k < n; ++k) {
+          expect_simd_eq(result(i, k), T(t(i, 1, k) - other(i, 1, k)));
+          total += t(i, 1, k);
+        }
+      }
+      expect_simd_eq(sum(tv), total);
+      if constexpr (not is_complex_v<T>) {
+        expect_simd_eq(max_element(tv), T(1 + (n - 1) + 10 * (n - 1)));
+        expect_simd_eq(min_element(tv), T(1));
+      }
+    }
+  }
+
+  template <typename T>
+  void check_row_contiguous_views_mixed_stride_order() {
+    constexpr long n = 2 * native_simd<T>::size + 3;
+    array<T, 3> c(n, 3, n);
+    array<T, 3, F_layout> f(n, 3, n);
+    for (long i = 0; i < n; ++i) {
+      for (long j = 0; j < 3; ++j) {
+        for (long k = 0; k < n; ++k) {
+          c(i, j, k) = T(1 + i + 10 * k);
+          f(i, j, k) = T(2 * i - k);
+        }
+      }
+    }
+    auto cv  = c(range::all, 1, range::all);
+    auto fv  = f(range::all, 1, range::all);
+    auto cvt = transpose(cv);
+    array<T, 2> rc(n, n);
+    array<T, 2, F_layout> rf(n, n);
+
+    static_assert(has_layout_smallest_stride_is_one<decltype(fv)> and has_layout_smallest_stride_is_one<decltype(cvt)>);
+    static_assert(get_layout_info<decltype(cv)>.stride_order != get_layout_info<decltype(fv)>.stride_order);
+    check_dispatch<true, true>(cv + cv);
+    check_dispatch<true, true>(fv + fv);
+    check_dispatch<true, true>(cvt + cvt);
+    check_dispatch<true, false>(cv + fv);
+    check_dispatch<true, false>(cv + cvt);
+    check_dispatch<true, false>(cv * fv - cvt);
+
+    auto check = [&](auto &result, auto const &expression, auto expected) {
+      result = expression;
+      for (long i = 0; i < n; ++i) {
+        for (long k = 0; k < n; ++k) { expect_simd_eq(result(i, k), T(expected(i, k))); }
+      }
+    };
+    check(rc, cv + fv, [&](long i, long k) { return c(i, 1, k) + f(i, 1, k); });
+    check(rf, cv + fv, [&](long i, long k) { return c(i, 1, k) + f(i, 1, k); });
+    check(rf, cv + cv, [&](long i, long k) { return T{2} * c(i, 1, k); });
+    check(rc, cv + cvt, [&](long i, long k) { return c(i, 1, k) + c(k, 1, i); });
+    check(rf, cvt * fv, [&](long i, long k) { return c(k, 1, i) * f(i, 1, k); });
+  }
+
+} // namespace
+
+TEST(SIMD, RowContiguousViews) {
+  check_row_contiguous_views<float, C_layout>();
+  check_row_contiguous_views<float, F_layout>();
+  check_row_contiguous_views<double, C_layout>();
+  check_row_contiguous_views<double, F_layout>();
+  check_row_contiguous_views<std::int32_t, C_layout>();
+  check_row_contiguous_views<std::int64_t, F_layout>();
+  check_row_contiguous_views<std::complex<double>, C_layout>();
+  check_row_contiguous_views<std::complex<double>, F_layout>();
+}
+
+TEST(SIMD, RowContiguousViewsMixedStrideOrder) {
+  check_row_contiguous_views_mixed_stride_order<float>();
+  check_row_contiguous_views_mixed_stride_order<double>();
+  check_row_contiguous_views_mixed_stride_order<std::int64_t>();
+  check_row_contiguous_views_mixed_stride_order<std::complex<double>>();
+}
+#endif
