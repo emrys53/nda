@@ -24,12 +24,13 @@ properties([
 
 def mounts = [:]
 
-def runBuild = { String platform, String prefix, List<String> envs ->
+def runBuild = { String platform, String prefix, List<String> envs, String simd ->
   def macos = platform.startsWith("macos-")
   def regen = regenPlatforms.contains(platform)
-  def buildDir = "$WORKSPACE_TMP/build"
+  def buildDir = "$WORKSPACE_TMP/build-simd-$simd"
   /* install real branches in a fixed predictable place so apps can find them */
-  def installDir = keepInstall ? "$prefix/install/$JOB_NAME/$platform" : "$WORKSPACE_TMP/install"
+  def installPlatform = "$platform-simd-$simd"
+  def installDir = keepInstall ? "$prefix/install/$JOB_NAME/$installPlatform" : "$WORKSPACE_TMP/install-simd-$simd"
   envs += [
     "OPENBLAS_NUM_THREADS=1",
     "MKL_NUM_THREADS=1",
@@ -75,7 +76,7 @@ def runBuild = { String platform, String prefix, List<String> envs ->
         checkout scmGit(userRemoteConfigs: [[url: 'https://github.com/flatironinstitute/clair']],
           branches: [[name: 'refs/heads/unstable']])
       }
-      dir("$WORKSPACE_TMP/clair") {
+      dir("$WORKSPACE_TMP/clair-simd-$simd") {
         sh """#!/bin/sh -ex
           unset CPLUS_INCLUDE_PATH
           unset CXXFLAGS
@@ -86,7 +87,7 @@ def runBuild = { String platform, String prefix, List<String> envs ->
       }
     }
     /* nda defaults PythonSupport OFF; enable it so the python bindings and converter tests are built */
-    def args = '-DPythonSupport=ON' + (regen ? ' -DUpdate_Python_Bindings=ON' : '')
+    def args = "-DPythonSupport=ON -DSIMDSupport=$simd" + (regen ? ' -DUpdate_Python_Bindings=ON' : '')
     if (platform == documentationPlatform)
       args += ' -DBuild_Documentation=ON'
     else if (platform == "sanitize")
@@ -94,7 +95,7 @@ def runBuild = { String platform, String prefix, List<String> envs ->
     else if (platform.endsWith("-cuda"))
       /* BLIS templates its config.mk through perl, which eats the '@' of Jenkins'
          "<workspace>@tmp" build dir, so fetch it somewhere @-free. */
-      args += " -DCudaSupport=ON -DCutensorSupport=ON -DTblisSupport=ON -DFETCHCONTENT_BASE_DIR=/tmp/deps-$platform"
+      args += " -DCudaSupport=ON -DCutensorSupport=ON -DTblisSupport=ON -DFETCHCONTENT_BASE_DIR=/tmp/deps-$platform-simd-$simd"
     dir(buildDir) {
       sh """#!/bin/sh -ex
         cmake $WORKSPACE -DCMAKE_INSTALL_PREFIX=$installDir $args
@@ -149,6 +150,7 @@ def postBenchmarkComment = {
 
 /* map of all builds to run, populated below */
 def platforms = [:]
+def simdSettings = ['OFF', 'ON']
 
 /****************** linux builds (in docker) */
 /* Each platform must have a corresponding Dockerfile.PLATFORM in jenkins/ */
@@ -156,15 +158,19 @@ def dockerPlatforms = ["ubuntu-clang", "ubuntu-gcc", "ubuntu-intel", "sanitize",
                        "ubuntu-clang-cuda", "ubuntu-gcc-cuda"]
 for (int i = 0; i < dockerPlatforms.size(); i++) {
   def platform = dockerPlatforms[i]
-  platforms[platform] = { ->
-    stage(platform) {
-      timeout(time: 1, unit: 'HOURS') {
-        buildPod([tag: platform,
-                  context: 'jenkins',
-                  dockerfile: "Dockerfile.$platform",
-                  devShm: true,
-                  mounts: mounts] + (platform.endsWith("-cuda") ? gpuPod : [:])) {
-          runBuild(platform, env.WORKSPACE_TMP, [])
+  for (int j = 0; j < simdSettings.size(); j++) {
+    def simd = simdSettings[j]
+    def stageName = "$platform-simd-$simd".toString()
+    platforms[stageName] = { ->
+      stage(stageName) {
+        timeout(time: 1, unit: 'HOURS') {
+          buildPod([tag: platform,
+                    context: 'jenkins',
+                    dockerfile: "Dockerfile.$platform",
+                    devShm: true,
+                    mounts: mounts] + (platform.endsWith("-cuda") ? gpuPod : [:])) {
+            runBuild(platform, env.WORKSPACE_TMP, [], simd)
+          }
         }
       }
     }
@@ -179,17 +185,21 @@ def macosPlatforms = [
 for (int i = 0; i < macosPlatforms.size(); i++) {
   def platformEnv = macosPlatforms[i]
   def platform = platformEnv[0]
-  platforms["macos-$platform"] = { -> node('macos && m1') {
-    stage("macos-$platform") { timeout(time: 1, unit: 'HOURS') {
-      runBuild("macos-$platform", env.HOME, platformEnv[1].collect { it.replace('\$BREW', env.BREW) })
+  for (int j = 0; j < simdSettings.size(); j++) {
+    def simd = simdSettings[j]
+    def stageName = "macos-$platform-simd-$simd".toString()
+    platforms[stageName] = { -> node('macos && m1') {
+      stage(stageName) { timeout(time: 1, unit: 'HOURS') {
+        runBuild("macos-$platform", env.HOME, platformEnv[1].collect { it.replace('\$BREW', env.BREW) }, simd)
+      } }
     } }
-  } }
+  }
 }
 
 /****************** wrap-up */
 catchError(catchInterruptions: false) {
-  // Temporarily build and run tests only on ubuntu-gcc.
-  parallel platforms.subMap(['ubuntu-gcc'])
+  // Build and run tests on all platforms, with both SIMD settings.
+  parallel platforms
 
   if (currentBuild.currentResult == 'SUCCESS' && env.CHANGE_ID) {
     timeout(time: 1, unit: 'HOURS') {
@@ -222,7 +232,8 @@ catchError(catchInterruptions: false) {
                 userRemoteConfigs: [[credentialsId: 'github-jenkins', url: 'https://github.com/TRIQS/TRIQS.github.io.git']])
               checkout scm: ghp, changelog: false, poll: false
               sh "rm -rf ${subdir}"
-              def installDir = "$WORKSPACE_TMP/install/$JOB_NAME/$documentationPlatform"
+              /* Publish documentation from the SIMD OFF installation. */
+              def installDir = "$WORKSPACE_TMP/install/$JOB_NAME/$documentationPlatform-simd-OFF"
               sh """#!/bin/bash -ex
                 base=$installDir/share/doc
                 dir="$projectName"
