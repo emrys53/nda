@@ -124,7 +124,8 @@ namespace nda {
    * @brief Constexpr variable that is true if an expression of type `A` is evaluated into values of type `T` with
    * native SIMD loads.
    *
-   * @details nda::simd::has_load_function is only probed for a contiguous layout, since probing instantiates `load`
+   * @details nda::simd::has_load_function is only probed if the fastest dimension is contiguous
+   * (nda::has_layout_smallest_stride_is_one), since probing instantiates `load`
    * signatures that may not compile.
    *
    * @tparam A Type of the expression.
@@ -132,7 +133,7 @@ namespace nda {
    */
   template <typename A, typename T = get_value_t<A>>
   inline constexpr bool is_simd_enabled_v = [] {
-    if constexpr (has_contiguous_layout<A>) {
+    if constexpr (has_layout_smallest_stride_is_one<A>) {
       return simd::has_load_function<A, T>();
     } else {
       return false;

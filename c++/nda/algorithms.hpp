@@ -125,7 +125,7 @@ namespace nda {
       using simd_t = native_simd<T>;
       simd_t acc(init);
       T r = init;
-      if constexpr (supports_flat_loop_v<A>) {
+      if constexpr (has_contiguous_layout<A> and supports_flat_loop_v<A>) {
         constexpr auto w = simd_t::size;
         const auto n     = a.size();
         long k           = 0;

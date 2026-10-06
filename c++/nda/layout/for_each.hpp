@@ -168,9 +168,10 @@ namespace nda {
   /**
    * @brief Loop over all elements of one or more nda::Array objects of the same shape in SIMD-width blocks.
    *
-   * @details All arrays must be contiguous with the same stride order and shape. If every array satisfies
-   * nda::supports_flat_loop_v, the callables receive one nda::_linear_index_t per block (`f_simd`) or element
-   * (`f_scalar`), otherwise a multi-index with `f_simd` stepping along the fastest dimension.
+   * @details All arrays must have a contiguous fastest dimension (nda::has_layout_smallest_stride_is_one), the same
+   * stride order and shape. If every array is contiguous and satisfies nda::supports_flat_loop_v, the callables
+   * receive one nda::_linear_index_t per block (`f_simd`) or element (`f_scalar`), otherwise a multi-index with
+   * `f_simd` stepping along the fastest dimension.
    *
    * @tparam F_SIMD Callable type applied to full SIMD blocks.
    * @tparam F_SCALAR Callable type applied to the remaining elements.
@@ -185,12 +186,13 @@ namespace nda {
   FORCEINLINE void for_each_simd(F_SIMD &&f_simd, F_SCALAR &&f_scalar, First const &first, [[maybe_unused]] Rest const &...rest) { // NOLINT
     static_assert(Vectorizable<get_value_t<First>> and (Vectorizable<get_value_t<Rest>> and ...),
                   "Error in for_each_simd: All Array elements have to be vectorizable.");
-    static_assert(has_contiguous_layout<First> and (has_contiguous_layout<Rest> and ...),
-                  "Error in for_each_simd: all arrays must have a contiguous layout to be vectorized");
+    static_assert(has_layout_smallest_stride_is_one<First> and (has_layout_smallest_stride_is_one<Rest> and ...),
+                  "Error in for_each_simd: all arrays must have a contiguous fastest dimension to be vectorized");
     static_assert(((get_layout_info<First>.stride_order == get_layout_info<Rest>.stride_order) and ...),
                   "Error in for_each_simd: all arrays must have the same stride order to be vectorized");
     static constexpr size_t simd_size = native_simd<get_value_t<First>>::size;
-    static constexpr bool flat_loop   = supports_flat_loop_v<First> and (supports_flat_loop_v<Rest> and ...);
+    static constexpr bool flat_loop   = has_contiguous_layout<First> and (has_contiguous_layout<Rest> and ...) and supports_flat_loop_v<First>
+       and (supports_flat_loop_v<Rest> and ...);
     EXPECTS(((first.shape() == rest.shape()) and ...));
     if constexpr (flat_loop) {
       const long n    = first.size();
