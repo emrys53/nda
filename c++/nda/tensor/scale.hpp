@@ -78,10 +78,10 @@ namespace nda::tensor {
         case unary_op::IDENTITY: a = alpha * a; break;
         case unary_op::CONJ: a = alpha * nda::conj(a); break;
         case unary_op::ABS: a = alpha * nda::abs(a); break;
-        case unary_op::SQRT: a = nda::map([alpha](auto x) { return alpha * std::sqrt(x); })(a); break;
-        case unary_op::EXP: a = nda::map([alpha](auto x) { return alpha * std::exp(x); })(a); break;
-        case unary_op::LOG: a = nda::map([alpha](auto x) { return alpha * std::log(x); })(a); break;
-        case unary_op::RCP: a = nda::map([alpha](auto x) { return alpha / x; })(a); break;
+        case unary_op::SQRT: a = alpha * nda::map(nda::detail::sqrt_f{})(a); break;
+        case unary_op::EXP: a = alpha * nda::map(nda::detail::exp_f{})(a); break;
+        case unary_op::LOG: a = alpha * nda::map(nda::detail::log_f{})(a); break;
+        case unary_op::RCP: a = nda::map(nda::detail::reciprocal_f{alpha})(a); break;
         default:
           NDA_RUNTIME_ERROR << "nda::tensor::scale: unsupported unary_op on nda host fallback "
                                "(supported: IDENTITY, CONJ, NEG, SQRT, ABS, EXP, LOG, RCP)";
