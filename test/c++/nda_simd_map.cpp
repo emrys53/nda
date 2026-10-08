@@ -115,8 +115,19 @@ TEST(SIMD, Promotions) {
 
   nda::array<float, 1> floats(65);
   floats = 0.5f;
+  static_assert(std::same_as<nda::get_value_t<decltype(nda::abs2(floats))>, float>);
+  static_assert(std::same_as<nda::get_value_t<decltype(nda::reciprocal(floats))>, float>);
+  static_assert(std::same_as<nda::get_value_t<decltype(nda::pow(floats, 2.0f))>, float>);
+  static_assert(std::same_as<nda::get_value_t<decltype(nda::pow(floats, 2.0))>, double>);
+#ifdef NDA_HAVE_XSIMD
+  static_assert(nda::is_simd_enabled_v<decltype(nda::abs2(floats))>);
+  static_assert(nda::is_simd_enabled_v<decltype(nda::reciprocal(floats))>);
+  static_assert(nda::is_simd_enabled_v<decltype(nda::pow(floats, 2.0f))>);
+  static_assert(not nda::is_simd_enabled_v<decltype(nda::pow(floats, 2.0))>);
+#endif
   check_expression(nda::abs2(floats), floats, [](float x) { return nda::detail::abs2(x); });
-  check_expression(nda::reciprocal(floats), floats, [](float x) { return 1.0 / x; });
+  check_expression(nda::reciprocal(floats), floats, [](float x) { return 1.0f / x; });
+  check_expression(nda::pow(floats, 2.0f), floats, [](float x) { return std::pow(x, 2.0f); });
   check_expression(nda::pow(floats, 2.0), floats, [](float x) { return std::pow(x, 2.0); });
 }
 
@@ -160,7 +171,11 @@ namespace {
       check_expression(nda::abs(y), y, [](T x) { return std::abs(x); });
       check_expression(nda::real(y), y, [](T x) { return std::real(x); });
       check_expression(nda::imag(y), y, [](T x) { return std::imag(x); });
-      if constexpr (std::same_as<T, std::complex<double>>) { check_expression(nda::abs2(y), y, [](T x) { return std::norm(x); }); }
+      static_assert(std::same_as<nda::get_value_t<decltype(nda::abs2(y))>, real_t>);
+      check_expression(nda::abs2(y), y, [](T x) { return std::norm(x); });
+      check_expression(nda::reciprocal(y), y, [](T x) { return real_t{1} / x; });
+      check_expression(nda::pow(y, real_t{2}), y, [](T x) { return std::pow(x, real_t{2}); });
+      check_expression(nda::pow(y, 2), y, [](T x) { return std::pow(x, 2); });
 
       nda::array<real_t, 1> sum = nda::abs(y) + nda::abs(z);
       for (long i = 0; i < n; ++i) { expect_close(sum(i), std::abs(y(i)) + std::abs(z(i))); }
@@ -171,8 +186,10 @@ namespace {
       static_assert(nda::is_simd_enabled_v<decltype(nda::imag(y))>);
       static_assert(nda::is_simd_enabled_v<decltype(nda::abs(y) + nda::abs(z))>);
       static_assert(nda::is_simd_enabled_v<decltype(nda::abs(y) * nda::real(z) - real_t{1})>);
-      // abs2's SIMD load is double only
-      static_assert(nda::is_simd_enabled_v<decltype(nda::abs2(y))> == std::same_as<T, std::complex<double>>);
+      static_assert(nda::is_simd_enabled_v<decltype(nda::abs2(y))>);
+      static_assert(nda::is_simd_enabled_v<decltype(nda::reciprocal(y))>);
+      static_assert(nda::is_simd_enabled_v<decltype(nda::pow(y, real_t{2}))>);
+      static_assert(not nda::is_simd_enabled_v<decltype(nda::pow(y, 2))>);
 #endif
     }
   }
@@ -217,9 +234,13 @@ TEST(SIMD, LoadConstraints) {
   static_assert(not nda::LoadWithNativeSimdTo<nda::detail::conj_f, bool, bool>);
   static_assert(not nda::LoadWithNativeSimdTo<nda::detail::conj_f, long double, long double>);
   static_assert(not nda::LoadWithNativeSimdTo<nda::detail::imag_f, int, int>);
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::reciprocal_f, float, float>);
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::pow_f, float, float>);
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::abs2_f, float, float>);
+  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::reciprocal_f<>, float, float>);
+  static_assert(nda::LoadWithNativeSimdTo<nda::detail::reciprocal_f<float>, float, float>);
+  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::pow_f<>, float, float>);
+  static_assert(nda::LoadWithNativeSimdTo<nda::detail::pow_f<float>, float, float>);
+  static_assert(nda::LoadWithNativeSimdTo<nda::detail::pow_f<int>, double, double>);
+  static_assert(nda::LoadWithNativeSimdTo<nda::detail::abs2_f, float, float>);
+  static_assert(nda::LoadWithNativeSimdTo<nda::detail::abs2_f, float, std::complex<float>>);
 
   // type-changing loads: complex batch in, real batch of the same width out
   static_assert(nda::LoadWithNativeSimdTo<nda::detail::abs_f, double, std::complex<double>>);
@@ -268,11 +289,10 @@ namespace {
     expect_close(nda::detail::imag_f{}.load(batch).get(0), nda::detail::imag(value));
 
     if constexpr (nda::is_complex_v<T>) { expect_close(nda::detail::abs_f{}.load(batch).get(0), std::abs(value)); }
-    if constexpr (std::same_as<nda::remove_complex_t<T>, double>) {
-      expect_close(nda::detail::abs2_f{}.load(batch).get(0), nda::detail::abs2(value));
-      expect_close(nda::detail::reciprocal_f{}.load(batch).get(0), T(1.0) / value);
-      expect_close(nda::detail::pow_f{2.0}.load(batch).get(0), T(std::pow(value, 2.0)));
-    }
+    expect_close(nda::detail::abs2_f{}.load(batch).get(0), nda::detail::abs2(value));
+    using real_t = nda::remove_complex_t<T>;
+    expect_close(nda::detail::reciprocal_f<real_t>{real_t{1}}.load(batch).get(0), T(1.0) / value);
+    expect_close(nda::detail::pow_f<real_t>{real_t{2}}.load(batch).get(0), T(std::pow(value, real_t{2})));
     if constexpr (not nda::is_complex_v<T>) {
       expect_close(nda::detail::max_f{}.load(batch, batch_t(T(1))).get(0), T(1));
       expect_close(nda::detail::min_f{}.load(batch, batch_t(T(1))).get(0), value);
