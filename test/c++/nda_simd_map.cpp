@@ -3,42 +3,21 @@
 // SPDX-License-Identifier: Apache-2.0
 // See LICENSE in the root of this distribution for details.
 
-#include "./test_common.hpp"
+#include "./simd_test_common.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <complex>
 #include <cstdint>
 #include <limits>
-
-TEST(SIMD, Domains) {
-  static_assert(not nda::SimdArithmetic<bool>);
-  static_assert(not nda::SimdRealOrComplex<long double>);
-  static_assert(not nda::SimdPreservesLaneWidth<double, long double>);
-  static_assert(nda::PreservesScalarType<nda::detail::abs_f, double>);
-  static_assert(not nda::PreservesScalarType<nda::detail::abs_f, std::int8_t>);
-  static_assert(not nda::PreservesScalarType<nda::detail::abs_f, std::complex<double>>);
-#ifndef NDA_HAVE_XSIMD
-  static_assert(not nda::SimdArithmetic<int>);
-  static_assert(not nda::SimdSigned<double>);
-  static_assert(not nda::SimdReal<float>);
-  static_assert(not nda::SimdRealOrComplex<std::complex<double>>);
-  static_assert(not nda::SimdComplex<std::complex<float>>);
-  static_assert(not nda::SimdPreservesLaneWidth<double, std::complex<double>>);
-#endif
-}
 
 namespace {
 
   // Empty inputs, exact batches, and tails for the active architecture.
   template <typename T>
   auto batch_sizes() {
-    constexpr long width = [] {
-#ifdef NDA_HAVE_XSIMD
-      if constexpr (nda::Vectorizable<T>) { return long(nda::native_simd<T>::size); }
-#endif
-      return 8L;
-    }();
-    return std::array<long, 7>{0, 1, width - 1, width, width + 1, 2 * width + 1, 4 * width + 1};
+    constexpr long w = simd_width<T>();
+    return std::array<long, 7>{0, 1, w - 1, w, w + 1, 2 * w + 1, 4 * w + 1};
   }
 
   template <typename T>
@@ -54,49 +33,76 @@ namespace {
     for (long i = 0; i < input.size(); ++i) { expect_close(result(i), scalar(input(i))); }
   }
 
-  template <typename T>
-  void check_math() {
-    for (long n : batch_sizes<T>()) {
-      nda::array<T, 1> a(n);
-      for (long i = 0; i < n; ++i) {
-        using real_t = nda::remove_complex_t<T>;
-        if constexpr (nda::is_complex_v<T>) {
-          a(i) = T(real_t(0.25 + 0.001 * i), real_t(0.125));
-        } else {
-          a(i) = T(0.25 + 0.001 * i);
-        }
-      }
-
-      // full batches and tails against the standard scalar functions
-#define CHECK_MATH(name) check_expression(nda::name(a), a, [](T x) { return std::name(x); })
-      CHECK_MATH(exp);
-      CHECK_MATH(cos);
-      CHECK_MATH(sin);
-      CHECK_MATH(tan);
-      CHECK_MATH(cosh);
-      CHECK_MATH(sinh);
-      CHECK_MATH(tanh);
-      CHECK_MATH(acos);
-      CHECK_MATH(asin);
-      CHECK_MATH(atan);
-      CHECK_MATH(log);
-      CHECK_MATH(sqrt);
-#undef CHECK_MATH
-
-#ifdef NDA_HAVE_XSIMD
-      static_assert(nda::is_simd_enabled_v<decltype(nda::exp(a))> == nda::Vectorizable<T>);
-#endif
-    }
-  }
-
 } // namespace
 
-TEST(SIMD, Math) {
-  check_math<float>();
-  check_math<double>();
-  check_math<std::complex<float>>();
-  check_math<std::complex<double>>();
-  check_math<long double>();
+template <typename T>
+class SIMDMath : public ::testing::Test {};
+using math_types = ::testing::Types<float, double, std::complex<float>, std::complex<double>, long double>;
+TYPED_TEST_SUITE(SIMDMath, math_types);
+
+TYPED_TEST(SIMDMath, Functions) {
+  using T      = TypeParam;
+  using real_t = nda::remove_complex_t<T>;
+  for (long n : batch_sizes<T>()) {
+    // a stays inside every domain below (acos/asin need [-1, 1], log/sqrt need > 0) with results near 1 for the
+    // absolute tolerance; b crosses zero and integers, which abs/floor/conj/max/min need to show any effect
+    nda::array<T, 1> a(n), b(n);
+    fill_random(a, 1, 0.1, 0.9);
+    fill_random(b, 2, -5.0, 5.0);
+
+    // full batches and tails against the standard scalar functions
+#define CHECK_MATH(name) check_expression(nda::name(a), a, [](T x) { return std::name(x); })
+    CHECK_MATH(exp);
+    CHECK_MATH(cos);
+    CHECK_MATH(sin);
+    CHECK_MATH(tan);
+    CHECK_MATH(cosh);
+    CHECK_MATH(sinh);
+    CHECK_MATH(tanh);
+    CHECK_MATH(acos);
+    CHECK_MATH(asin);
+    CHECK_MATH(atan);
+    CHECK_MATH(log);
+    CHECK_MATH(sqrt);
+#undef CHECK_MATH
+    check_expression(nda::abs2(a), a, [](T x) { return std::norm(x); });
+    check_expression(nda::reciprocal(a), a, [](T x) { return real_t{1} / x; });
+    check_expression(nda::pow(a, real_t{2}), a, [](T x) { return std::pow(x, real_t{2}); });
+    check_expression(nda::pow(a, 2), a, [](T x) { return std::pow(x, 2); });
+
+    check_expression(nda::conj(b), b, [](T x) -> T {
+      if constexpr (nda::is_complex_v<T>) {
+        return std::conj(x);
+      } else {
+        return x;
+      }
+    });
+    check_expression(nda::real(b), b, [](T x) { return std::real(x); });
+    check_expression(nda::imag(b), b, [](T x) { return std::imag(x); });
+    check_expression(nda::abs(b), b, [](T x) { return std::abs(x); });
+    if constexpr (not nda::is_complex_v<T>) {
+      check_expression(nda::floor(b), b, [](T x) { return std::floor(x); });
+      check_expression(nda::max(b, T(0.5) * b), b, [](T x) { return std::max(x, T(0.5) * x); });
+      check_expression(nda::min(b, T(0.5) * b), b, [](T x) { return std::min(x, T(0.5) * x); });
+    }
+
+#ifdef NDA_HAVE_XSIMD
+    // the checks above run the native loads whenever T has a batch
+    constexpr bool vectorizable = nda::Vectorizable<T>;
+    static_assert(nda::is_simd_enabled_v<decltype(nda::exp(a))> == vectorizable);
+    static_assert(nda::is_simd_enabled_v<decltype(nda::abs2(a))> == vectorizable);
+    static_assert(nda::is_simd_enabled_v<decltype(nda::reciprocal(a))> == vectorizable);
+    static_assert(nda::is_simd_enabled_v<decltype(nda::pow(a, real_t{2}))> == vectorizable);
+    static_assert(nda::is_simd_enabled_v<decltype(nda::conj(b))> == vectorizable);
+    static_assert(nda::is_simd_enabled_v<decltype(nda::real(b))> == vectorizable);
+    static_assert(nda::is_simd_enabled_v<decltype(nda::imag(b))> == vectorizable);
+    static_assert(nda::is_simd_enabled_v<decltype(nda::abs(b))> == vectorizable);
+    if constexpr (not nda::is_complex_v<T>) {
+      static_assert(nda::is_simd_enabled_v<decltype(nda::floor(b))> == vectorizable);
+      static_assert(nda::is_simd_enabled_v<decltype(nda::max(b, T(0.5) * b))> == vectorizable);
+    }
+#endif
+  }
 }
 
 TEST(SIMD, Promotions) {
@@ -113,112 +119,42 @@ TEST(SIMD, Promotions) {
   check_expression(nda::floor(integers), integers, [](int x) { return std::floor(x); });
   check_expression(nda::imag(integers), integers, [](int x) { return std::imag(x); });
 
+  // a double exponent promotes floats to double, which changes the lane width, so it stays scalar
   nda::array<float, 1> floats(65);
   floats = 0.5f;
-  static_assert(std::same_as<nda::get_value_t<decltype(nda::abs2(floats))>, float>);
-  static_assert(std::same_as<nda::get_value_t<decltype(nda::reciprocal(floats))>, float>);
-  static_assert(std::same_as<nda::get_value_t<decltype(nda::pow(floats, 2.0f))>, float>);
-  static_assert(std::same_as<nda::get_value_t<decltype(nda::pow(floats, 2.0))>, double>);
 #ifdef NDA_HAVE_XSIMD
-  static_assert(nda::is_simd_enabled_v<decltype(nda::abs2(floats))>);
-  static_assert(nda::is_simd_enabled_v<decltype(nda::reciprocal(floats))>);
-  static_assert(nda::is_simd_enabled_v<decltype(nda::pow(floats, 2.0f))>);
   static_assert(not nda::is_simd_enabled_v<decltype(nda::pow(floats, 2.0))>);
 #endif
-  check_expression(nda::abs2(floats), floats, [](float x) { return nda::detail::abs2(x); });
-  check_expression(nda::reciprocal(floats), floats, [](float x) { return 1.0f / x; });
-  check_expression(nda::pow(floats, 2.0f), floats, [](float x) { return std::pow(x, 2.0f); });
   check_expression(nda::pow(floats, 2.0), floats, [](float x) { return std::pow(x, 2.0); });
 }
 
 TEST(SIMD, Composition) {
   using complex_t = std::complex<double>;
   nda::array<complex_t, 2, nda::F_layout> a(5, 13);
-  a = complex_t(0.25, 0.125);
+  fill_random(a, 1, 0.1, 0.9);
   // real/imag change complex -> double but keep the SIMD width, so the whole tree vectorizes
   auto expression = nda::max(nda::real(nda::exp(a)), nda::imag(nda::conj(a)));
 #ifdef NDA_HAVE_XSIMD
   static_assert(nda::is_simd_enabled_v<decltype(expression)>);
 #endif
   nda::array<double, 2, nda::F_layout> result = expression;
-  for (auto x : result) { expect_close(x, std::max(std::real(std::exp(a(0, 0))), std::imag(std::conj(a(0, 0))))); }
+  for (long i = 0; i < 5; ++i) {
+    for (long j = 0; j < 13; ++j) { expect_close(result(i, j), std::max(std::real(std::exp(a(i, j))), std::imag(std::conj(a(i, j))))); }
+  }
 }
 
 TEST(SIMD, Isnan) {
-  using complex_t = std::complex<double>;
-  nda::array<complex_t, 2> a(5, 13);
-  a = complex_t(0.25, 0.125);
+  constexpr double nan = std::numeric_limits<double>::quiet_NaN();
+  nda::array<std::complex<double>, 2> a(5, 13);
+  a       = std::complex<double>(0.25, 0.125);
+  a(1, 2) = {nan, 0};
+  a(2, 4) = {0, nan};
   nda::array<bool, 2> nan_result = nda::isnan(a);
-  for (auto x : nan_result) { EXPECT_FALSE(x); }
-  a(2, 4) = complex_t(0, std::numeric_limits<double>::quiet_NaN());
-  nan_result = nda::isnan(a);
-  EXPECT_TRUE(nan_result(2, 4));
-  EXPECT_FALSE(nan_result(0, 0));
-}
-
-namespace {
-
-  template <typename T>
-  void check_complex_to_real() {
-    using real_t = nda::remove_complex_t<T>;
-    for (long n : batch_sizes<T>()) {
-      nda::array<T, 1> y(n), z(n);
-      for (long i = 0; i < n; ++i) {
-        y(i) = T(real_t(0.25 + 0.001 * i), real_t(-0.125 + 0.002 * i));
-        z(i) = T(real_t(-0.5 + 0.003 * i), real_t(0.75));
-      }
-
-      check_expression(nda::abs(y), y, [](T x) { return std::abs(x); });
-      check_expression(nda::real(y), y, [](T x) { return std::real(x); });
-      check_expression(nda::imag(y), y, [](T x) { return std::imag(x); });
-      static_assert(std::same_as<nda::get_value_t<decltype(nda::abs2(y))>, real_t>);
-      check_expression(nda::abs2(y), y, [](T x) { return std::norm(x); });
-      check_expression(nda::reciprocal(y), y, [](T x) { return real_t{1} / x; });
-      check_expression(nda::pow(y, real_t{2}), y, [](T x) { return std::pow(x, real_t{2}); });
-      check_expression(nda::pow(y, 2), y, [](T x) { return std::pow(x, 2); });
-
-      nda::array<real_t, 1> sum = nda::abs(y) + nda::abs(z);
-      for (long i = 0; i < n; ++i) { expect_close(sum(i), std::abs(y(i)) + std::abs(z(i))); }
-
-#ifdef NDA_HAVE_XSIMD
-      static_assert(nda::is_simd_enabled_v<decltype(nda::abs(y))>);
-      static_assert(nda::is_simd_enabled_v<decltype(nda::real(y))>);
-      static_assert(nda::is_simd_enabled_v<decltype(nda::imag(y))>);
-      static_assert(nda::is_simd_enabled_v<decltype(nda::abs(y) + nda::abs(z))>);
-      static_assert(nda::is_simd_enabled_v<decltype(nda::abs(y) * nda::real(z) - real_t{1})>);
-      static_assert(nda::is_simd_enabled_v<decltype(nda::abs2(y))>);
-      static_assert(nda::is_simd_enabled_v<decltype(nda::reciprocal(y))>);
-      static_assert(nda::is_simd_enabled_v<decltype(nda::pow(y, real_t{2}))>);
-      static_assert(not nda::is_simd_enabled_v<decltype(nda::pow(y, 2))>);
-#endif
-    }
-  }
-
-} // namespace
-
-TEST(SIMD, ComplexToReal) {
-  check_complex_to_real<std::complex<float>>();
-  check_complex_to_real<std::complex<double>>();
+  EXPECT_TRUE(nan_result(1, 2) and nan_result(2, 4));
+  EXPECT_EQ(std::count(nan_result.begin(), nan_result.end(), true), 2);
 }
 
 #ifdef NDA_HAVE_XSIMD
-TEST(SIMD, NativeDomains) {
-  static_assert(nda::SimdArithmetic<int>);
-  static_assert(nda::SimdSigned<double>);
-  static_assert(not nda::SimdSigned<unsigned int>);
-  static_assert(nda::SimdReal<float>);
-  static_assert(not nda::SimdReal<std::complex<float>>);
-  static_assert(nda::SimdRealOrComplex<std::complex<double>>);
-  static_assert(not nda::SimdRealOrComplex<int>);
-  static_assert(nda::SimdComplex<std::complex<float>>);
-  static_assert(not nda::SimdComplex<double>);
-  static_assert(nda::SimdPreservesLaneWidth<double, std::complex<double>, double>);
-  static_assert(nda::SimdPreservesLaneWidth<float, std::complex<float>>);
-  static_assert(nda::SimdPreservesLaneWidth<double const &, std::complex<double> const &>);
-  static_assert(not nda::SimdPreservesLaneWidth<double, float>);
-  static_assert(not nda::SimdPreservesLaneWidth<bool, double>);
-}
-
 namespace {
   template <typename F, typename T>
   concept unary_loadable = requires(F const &f, T const &x) { f.load(x); };
@@ -258,7 +194,7 @@ TEST(SIMD, LoadConstraints) {
   // A load that changes the SIMD width (double -> float batches) must not be dispatched natively.
   struct narrowing_f {
     float operator()(double x) const { return static_cast<float>(x); }
-    nda::native_simd<float> load(nda::native_simd<double> const &) const { return nda::native_simd<float>(0.f); }
+    [[nodiscard]] nda::native_simd<float> load(nda::native_simd<double> const &) const { return {0.f}; }
   };
   static_assert(nda::LoadWithNativeSimdTo<narrowing_f, float, double>);
   using narrowing_expr = decltype(nda::map(narrowing_f{})(std::declval<nda::array<double, 1> &>()));
@@ -270,44 +206,5 @@ TEST(SIMD, LoadConstraints) {
   static_assert(not unary_loadable<nda::detail::exp_f, nda::native_simd<int>>);
   static_assert(not unary_loadable<nda::detail::abs_f, nda::native_simd<unsigned int>>);
   static_assert(nda::LoadWithNativeSimdTo<nda::detail::exp_f, double, double>);
-}
-
-namespace {
-  template <typename T>
-  void check_direct_loads() {
-    using batch_t = nda::native_simd<T>;
-    T value;
-    if constexpr (nda::is_complex_v<T>) {
-      value = T(0.5, 0.125);
-    } else {
-      value = T(0.5);
-    }
-    batch_t batch(value);
-
-    expect_close(nda::detail::conj_f{}.load(batch).get(0), nda::detail::conj(value));
-    expect_close(nda::detail::real_f{}.load(batch).get(0), nda::detail::real(value));
-    expect_close(nda::detail::imag_f{}.load(batch).get(0), nda::detail::imag(value));
-
-    if constexpr (nda::is_complex_v<T>) { expect_close(nda::detail::abs_f{}.load(batch).get(0), std::abs(value)); }
-    expect_close(nda::detail::abs2_f{}.load(batch).get(0), nda::detail::abs2(value));
-    using real_t = nda::remove_complex_t<T>;
-    expect_close(nda::detail::reciprocal_f<real_t>{real_t{1}}.load(batch).get(0), T(1.0) / value);
-    expect_close(nda::detail::pow_f<real_t>{real_t{2}}.load(batch).get(0), T(std::pow(value, real_t{2})));
-    if constexpr (not nda::is_complex_v<T>) {
-      expect_close(nda::detail::max_f{}.load(batch, batch_t(T(1))).get(0), T(1));
-      expect_close(nda::detail::min_f{}.load(batch, batch_t(T(1))).get(0), value);
-      expect_close(nda::detail::floor_f{}.load(batch).get(0), std::floor(value));
-      expect_close(nda::detail::abs_f{}.load(-batch).get(0), std::abs(-value));
-    }
-    expect_close(nda::detail::exp_f{}.load(batch).get(0), std::exp(value));
-  }
-
-} // namespace
-
-TEST(SIMD, DirectLoad) {
-  check_direct_loads<float>();
-  check_direct_loads<double>();
-  check_direct_loads<std::complex<float>>();
-  check_direct_loads<std::complex<double>>();
 }
 #endif
