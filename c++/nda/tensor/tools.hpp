@@ -107,31 +107,6 @@ namespace nda::tensor {
   };
   // clang-format on
 
-  namespace detail {
-
-    // Apply a nda::tensor::binary_op to two scalar operands.
-    template <typename T>
-    T apply_binary(binary_op op, T x, T y) {
-      switch (op) {
-        case binary_op::SUM: return x + y;
-        case binary_op::PROD: return x * y;
-        case binary_op::SUM_ABS: return std::abs(x) + std::abs(y);
-        case binary_op::MAX_ABS: return std::max(std::abs(x), std::abs(y));
-        case binary_op::MIN_ABS: return std::min(std::abs(x), std::abs(y));
-        case binary_op::NORM_2: return std::sqrt(std::norm(x) + std::norm(y));
-        case binary_op::MAX:
-        case binary_op::MIN:
-          if constexpr (!is_complex_v<T>) {
-            return (op == binary_op::MAX ? std::max(x, y) : std::min(x, y));
-          } else {
-            NDA_RUNTIME_ERROR << "nda::tensor: binary_op::MAX/MIN are unsupported for complex value types";
-          }
-      }
-      return T{}; // unreachable
-    }
-
-  } // namespace detail
-
   /**
    * @brief A type-erased, non-owning view of an nda::MemoryArray or a conjugate lazy expression.
    *

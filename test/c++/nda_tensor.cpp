@@ -10,6 +10,7 @@
 
 #include <complex>
 #include <concepts>
+#include <vector>
 
 using namespace std::complex_literals;
 using nda::C_layout, nda::F_layout;
@@ -631,6 +632,13 @@ void test_elementwise_trinary() {
   check(binary_op::SUM, binary_op::PROD, (alpha * A + beta * B) * (gamma * C));
   check(binary_op::PROD, binary_op::PROD, (alpha * A) * (beta * B) * (gamma * C));
 
+  // default-scalars overload: alpha = beta = 1, gamma = 0 and op_AB = op_ABC = SUM
+  {
+    auto C_d = to_addr_space<AS3>(C);
+    nda::tensor::elementwise_trinary(to_addr_space<AS1>(A), "abc", to_addr_space<AS2>(B), "abc", C_d, "abc");
+    EXPECT_ARRAY_NEAR(nda::to_host(C_d), A + B, fp_tol<T> * 10);
+  }
+
   // MAX/MIN-involved combos: real value types only
   if constexpr (!nda::is_complex_v<T>) {
     check(binary_op::SUM, binary_op::MAX, nda::max(alpha * A + beta * B, gamma * C));
@@ -665,6 +673,9 @@ void test_elementwise_trinary() {
 
     exp = nda::max(nda::abs((alpha * A) * (beta * B)), nda::abs(gamma * C));
     check(binary_op::PROD, binary_op::MAX_ABS, exp);
+
+    exp = nda::min(nda::abs(alpha * A + beta * B), nda::abs(gamma * C));
+    check(binary_op::SUM, binary_op::MIN_ABS, exp);
 
     exp = nda::sqrt(nda::abs2(alpha * A + beta * B) + nda::abs2(gamma * C));
     check(binary_op::SUM, binary_op::NORM_2, exp);
@@ -791,6 +802,9 @@ void test_elementwise() {
 
     // mismatched indices throw on the nda fallback
     EXPECT_THROW(nda::tensor::elementwise(alpha, A_d, "abc", beta, B_d, "acb", binary_op::PROD), nda::runtime_error);
+
+    // an out-of-range binary_op throws on the nda fallback
+    EXPECT_THROW(nda::tensor::elementwise(alpha, A_d, "abc", beta, B_d, "abc", static_cast<binary_op>(255)), nda::runtime_error);
   } else {
     // differing index strings work (idx_b is a permutation of idx_a)
     auto B_perm = nda::array<T, 3>::rand({3, 4, 2}); // indexed "bca"
@@ -836,6 +850,59 @@ TEST(NDA, TensorElementwiseOnHost) {
   test_elementwise_on_host<std::complex<float>>();
   test_elementwise_on_host<double>();
   test_elementwise_on_host<std::complex<double>>();
+}
+
+// Test the nda host fallback of the generic tensor elementwise functions with nda::matrix operands for every op (pair),
+// against nda::array operands. With matrices, NORM_2 must not go through nda::sqrt (it rejects matrix algebra) and PROD
+// must stay a Hadamard product. The trinary reference is the binary function applied twice: op_ABC(op_AB(...), gamma C).
+template <typename T>
+void test_elementwise_matrix_on_host() {
+  using nda::tensor::binary_op;
+
+  T alpha = T{2};
+  T beta  = T{3};
+  T gamma = T{4};
+  if constexpr (nda::is_complex_v<T>) {
+    alpha *= 1 + 1i;
+    beta *= 2 - 1i;
+    gamma *= 1 - 2i;
+  }
+
+  auto A = nda::array<T, 2>::rand({3, 4});
+  auto B = nda::array<T, 2>::rand({3, 4});
+  auto C = nda::array<T, 2>::rand({3, 4});
+  auto const A_m = nda::matrix<T>(A);
+  auto const B_m = nda::matrix<T>(B);
+
+  // op(x_scale * X, y_scale * Y) on arrays
+  auto binary = [](binary_op op, T x_scale, nda::array<T, 2> const &X, T y_scale, nda::array<T, 2> Y) {
+    nda::tensor::elementwise(x_scale, X, y_scale, Y, op);
+    return Y;
+  };
+
+  // MAX/MIN throw for complex value types (tested in test_elementwise)
+  std::vector ops{binary_op::SUM, binary_op::PROD, binary_op::SUM_ABS, binary_op::MAX_ABS, binary_op::MIN_ABS, binary_op::NORM_2};
+  if constexpr (!nda::is_complex_v<T>) { ops.insert(ops.end(), {binary_op::MAX, binary_op::MIN}); }
+
+  for (auto op_AB : ops) {
+    auto const AB = binary(op_AB, alpha, A, beta, B);
+    auto B_r      = nda::matrix<T>(B);
+    nda::tensor::elementwise(alpha, A_m, beta, B_r, op_AB);
+    EXPECT_ARRAY_NEAR(nda::make_array_view(B_r), AB, fp_tol<T>);
+
+    for (auto op_ABC : ops) {
+      auto C_r = nda::matrix<T>(C);
+      nda::tensor::elementwise_trinary(alpha, A_m, "ab", beta, B_m, "ab", gamma, C_r, "ab", op_AB, op_ABC);
+      EXPECT_ARRAY_NEAR(nda::make_array_view(C_r), binary(op_ABC, T{1}, AB, gamma, C), fp_tol<T> * 10);
+    }
+  }
+}
+
+TEST(NDA, TensorElementwiseMatrixOnHost) {
+  test_elementwise_matrix_on_host<float>();
+  test_elementwise_matrix_on_host<std::complex<float>>();
+  test_elementwise_matrix_on_host<double>();
+  test_elementwise_matrix_on_host<std::complex<double>>();
 }
 
 // Test the generic tensor reduce function.

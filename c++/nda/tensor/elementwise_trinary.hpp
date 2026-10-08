@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "./elementwise.hpp"
 #include "./interface/cutensor_interface.hpp"
 #include "./tools.hpp"
 #include "../exceptions.hpp"
@@ -43,7 +44,7 @@ namespace nda::tensor {
    * <summary>**Dispatch order and details**:</summary>
    * - If the input arrays satisfy nda::mem::have_device_compatible_addr_space, cuTENSOR's elementwise trinary operation
    * is used.
-   * - Otherwise, fallback to nda expression assignment via nda::map.
+   * - Otherwise, fallback to a single (vectorizable) lazy nda expression assignment.
    *
    * The supported binary operations depend on the library backend. The nda host fallback requires identical ranks
    * and identical index strings and supports all nda::tensor::binary_op values for both `op_AB` and `op_ABC`.
@@ -84,9 +85,10 @@ namespace nda::tensor {
     } else {
       require_equal_indices(idx_a, idx_b, get_rank<A>, "elementwise_trinary");
       require_equal_indices(idx_b, idx_c, get_rank<A>, "elementwise_trinary");
-      c = nda::map([alpha, beta, gamma, op_AB, op_ABC](auto x, auto y, auto z) {
-        return detail::apply_binary(op_ABC, detail::apply_binary(op_AB, alpha * x, beta * y), gamma * z);
-      })(a, b, c);
+      // c = op_ABC(op_AB(alpha * a, beta * b), gamma * c) as a single vectorizable expression
+      detail::visit_binary_expr(op_AB, alpha, a, beta, b, [&](auto const &ab) {
+        detail::visit_binary_expr_unscaled(op_ABC, ab, gamma, c, [&](auto const &abc) { c = abc; });
+      });
     }
   }
 

@@ -12,7 +12,10 @@
 
 #include "./interface/cutensor_interface.hpp"
 #include "./tools.hpp"
+#include "../algorithms.hpp"
 #include "../exceptions.hpp"
+#include "../mapped_functions.hpp"
+#include "../mapped_functions.hxx"
 #include "../mem/address_space.hpp"
 #include "../traits.hpp"
 
@@ -25,6 +28,70 @@ namespace nda::tensor {
    * @addtogroup tensor_ops
    * @{
    */
+
+  namespace detail {
+    // Calls f with the lazy expression op(alpha * x, beta * y), so that nda can vectorize its assignment. Every op
+    // yields a different expression type, hence the visitor instead of a return value. T is the tensor value type.
+    // The scalars stay apart from x and y so that NORM_2 scales by std::norm(alpha) and PROD by alpha * beta once,
+    // instead of multiplying every element, which for complex T is a full complex multiplication.
+    template <typename T, typename X, typename Y, typename F>
+    void visit_binary_expr(binary_op op, T alpha, X const &x, T beta, Y const &y, F &&f) {
+      switch (op) {
+        case binary_op::SUM: f(alpha * x + beta * y); return;
+        case binary_op::PROD: f((alpha * beta) * nda::hadamard(x, y)); return;
+        case binary_op::SUM_ABS: f(nda::abs(alpha * x) + nda::abs(beta * y)); return;
+        case binary_op::MAX_ABS: f(nda::max(nda::abs(alpha * x), nda::abs(beta * y))); return;
+        case binary_op::MIN_ABS: f(nda::min(nda::abs(alpha * x), nda::abs(beta * y))); return;
+        // nda::sqrt rejects matrix algebra, so map sqrt_f directly to also accept nda::matrix operands
+        case binary_op::NORM_2: f(nda::map(nda::detail::sqrt_f{})(std::norm(alpha) * nda::abs2(x) + std::norm(beta) * nda::abs2(y))); return;
+        case binary_op::MAX:
+        case binary_op::MIN:
+          if constexpr (is_complex_v<T>) {
+            NDA_RUNTIME_ERROR << "nda::tensor: binary_op::MAX/MIN are unsupported for complex value types";
+          } else if (op == binary_op::MAX) {
+            f(nda::max(alpha * x, beta * y));
+          } else {
+            f(nda::min(alpha * x, beta * y));
+          }
+          return;
+      }
+      // No default case, so -Wswitch flags an unhandled binary_op at compile time; this catches out-of-range values.
+      NDA_RUNTIME_ERROR << "nda::tensor: unhandled binary_op " << static_cast<int>(op);
+    }
+
+    // visit_binary_expr without alpha, for the second trinary operation whose x is the first result. Passing alpha = 1
+    // instead would still multiply every element of x by one, since the value is only known at runtime.
+    template <typename T, typename X, typename Y, typename F>
+    void visit_binary_expr_unscaled(binary_op op, X const &x, T beta, Y const &y, F &&f) {
+      switch (op) {
+        case binary_op::SUM: f(x + beta * y); return;
+        case binary_op::PROD: f(beta * nda::hadamard(x, y)); return;
+        case binary_op::SUM_ABS: f(nda::abs(x) + nda::abs(beta * y)); return;
+        case binary_op::MAX_ABS: f(nda::max(nda::abs(x), nda::abs(beta * y))); return;
+        case binary_op::MIN_ABS: f(nda::min(nda::abs(x), nda::abs(beta * y))); return;
+        // nda::sqrt rejects matrix algebra, so map sqrt_f directly to also accept nda::matrix operands
+        case binary_op::NORM_2: f(nda::map(nda::detail::sqrt_f{})(nda::abs2(x) + std::norm(beta) * nda::abs2(y))); return;
+        case binary_op::MAX:
+        case binary_op::MIN:
+          if constexpr (is_complex_v<T>) {
+            NDA_RUNTIME_ERROR << "nda::tensor: binary_op::MAX/MIN are unsupported for complex value types";
+          } else if (op == binary_op::MAX) {
+            f(nda::max(x, beta * y));
+          } else {
+            f(nda::min(x, beta * y));
+          }
+          return;
+      }
+      // No default case, so -Wswitch flags an unhandled binary_op at compile time; this catches out-of-range values.
+      NDA_RUNTIME_ERROR << "nda::tensor: unhandled binary_op " << static_cast<int>(op);
+    }
+
+    // out = op(alpha * a, beta * b)
+    template <typename A, typename B, typename Out>
+    void assign_binary(binary_op op, get_value_t<A> alpha, A const &a, get_value_t<A> beta, B const &b, Out &&out) { // NOLINT
+      visit_binary_expr(op, alpha, a, beta, b, [&](auto const &e) { out = e; });
+    }
+  } // namespace detail
 
   /**
    * @brief In-place elementwise binary tensor operation with cuTENSOR/nda dispatch.
@@ -42,7 +109,7 @@ namespace nda::tensor {
    * <summary>**Dispatch order and details**:</summary>
    * - If the input arrays satisfy nda::mem::have_device_compatible_addr_space, cuTENSOR's elementwise binary operation
    * is used.
-   * - Otherwise, fallback to nda expression assignment via nda::map.
+   * - Otherwise, fallback to a single (vectorizable) lazy nda expression assignment.
    *
    * The supported binary operations depend on the library backend. The nda host fallback requires identical ranks 
    * and identical index strings and supports all nda::tensor::binary_op values.
@@ -73,7 +140,7 @@ namespace nda::tensor {
       device::elementwise_binary(alpha, a, idx_a, beta, b, idx_b, b, op);
     } else {
       require_equal_indices(idx_a, idx_b, get_rank<A>, "elementwise");
-      b = nda::map([alpha, beta, op](auto x, auto y) { return detail::apply_binary(op, alpha * x, beta * y); })(a, b);
+      detail::assign_binary(op, alpha, a, beta, b, b);
     }
   }
 
