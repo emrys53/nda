@@ -19,6 +19,7 @@
 #include <cmath>
 #include <complex>
 #include <concepts>
+#include <type_traits>
 #include <utility>
 
 namespace nda {
@@ -56,11 +57,24 @@ namespace nda {
       }
     }
 
-    // Get the squared absolute value of a double.
-    inline double abs2(double x) { return x * x; }
+    // Preserve floating-point precision; retain double results for integral inputs.
+    template <std::floating_point T>
+    T abs2(T x) { return x * x; }
 
-    // Get the squared absolute value of a std::complex<double>.
-    inline double abs2(std::complex<double> z) { return (conj(z) * z).real(); }
+    template <std::integral T>
+    double abs2(T x) {
+      auto const y = static_cast<double>(x);
+      return y * y;
+    }
+
+    template <std::floating_point T>
+    T abs2(std::complex<T> z) { return std::norm(z); }
+
+    template <std::integral T>
+    double abs2(std::complex<T> z) {
+      std::complex<double> const y(static_cast<double>(z.real()), static_cast<double>(z.imag()));
+      return std::norm(y);
+    }
 
     // Check if a std::complex<double> is NaN.
     inline bool isnan(std::complex<double> const &z) { return std::isnan(z.real()) or std::isnan(z.imag()); }
@@ -124,8 +138,8 @@ namespace nda {
       FORCEINLINE auto operator()(auto const &x) const { return detail::abs2(x); }
 #ifdef NDA_HAVE_XSIMD
       template <SimdRealOrComplex T>
-        requires(std::same_as<remove_complex_t<T>, double> and SimdPreservesLaneWidth<double, T>)
-      FORCEINLINE native_simd<double> load(native_simd<T> const &x) const {
+        requires SimdPreservesLaneWidth<remove_complex_t<T>, T>
+      FORCEINLINE native_simd<remove_complex_t<T>> load(native_simd<T> const &x) const {
         if constexpr (is_complex_v<T>) {
           using xsimd::norm;
           return norm(x);
@@ -171,32 +185,38 @@ namespace nda {
 #endif
     };
 
+    template <typename S = double>
     struct reciprocal_f {
+      S alpha{1};
       FORCEINLINE auto operator()(auto const &x) const {
         if constexpr (Scalar<std::remove_cvref_t<decltype(x)>>) {
-          return 1.0 / x;
+          return alpha / x;
         } else {
-          return reciprocal(x); // nested arrays: nda::reciprocal, found by ADL at instantiation
+          return alpha * reciprocal(x); // nested arrays: nda::reciprocal, found by ADL at instantiation
         }
       }
 #ifdef NDA_HAVE_XSIMD
       template <SimdRealOrComplex T>
-        requires(std::same_as<remove_complex_t<T>, double> and PreservesScalarType<reciprocal_f, T>)
+        requires(PreservesScalarType<reciprocal_f, T>)
       FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
-        return native_simd<T>(1) / x;
+        return native_simd<T>(static_cast<T>(alpha)) / x;
       }
 #endif
     };
 
+    template <typename P = double>
     struct pow_f {
-      double exponent;
+      P exponent;
       FORCEINLINE auto operator()(auto const &x) const {
         using std::pow;
         return pow(x, exponent);
       }
 #ifdef NDA_HAVE_XSIMD
+      // Integer exponents on complex inputs use a distinct std::pow overload; keep those on the scalar path.
       template <SimdRealOrComplex T>
-        requires(std::same_as<remove_complex_t<T>, double> and PreservesScalarType<pow_f, T>)
+        requires(PreservesScalarType<pow_f, T>
+                 and (std::same_as<P, remove_complex_t<T>> or std::same_as<P, T>
+                      or (std::same_as<T, double> and std::is_arithmetic_v<P>)))
       FORCEINLINE native_simd<T> load(native_simd<T> const &x) const {
         using xsimd::pow;
         return pow(x, native_simd<T>(exponent));
@@ -253,10 +273,11 @@ namespace nda {
    * @param a nda::ArrayOrScalar object.
    * @param p Exponent value.
    * @return A lazy nda::expr_call object (nda::Array) or the result of `std::pow` applied to the object (nda::Scalar).
+   *         The exponent retains its type, so the scalar result follows `std::pow` overload resolution.
    */
-  template <ArrayOrScalar A>
-  auto pow(A &&a, double p) {
-    return nda::map(detail::pow_f{p})(std::forward<A>(a));
+  template <ArrayOrScalar A, Scalar P>
+  auto pow(A &&a, P p) {
+    return nda::map(detail::pow_f<P>{p})(std::forward<A>(a));
   }
 
   /**
@@ -282,12 +303,18 @@ namespace nda {
    * 
    * @tparam A nda::ArrayOrScalar type.
    * @param a nda::ArrayOrScalar object.
-   * @return A lazy nda::expr_call object (nda::Array) or the result of \f$ 1.0 / x \f$ applied to the object 
-   * (nda::Scalar).
+   * @return A lazy nda::expr_call object (nda::Array) or the result of \f$ 1 / x \f$ applied to the object
+   * (nda::Scalar), in the input's floating-point precision. Integral inputs return double.
    */
   template <ArrayOrScalar A>
   auto reciprocal(A &&a) {
-    return nda::map(detail::reciprocal_f{})(std::forward<A>(a));
+    if constexpr (Array<get_value_t<A>>) {
+      return nda::map([](auto const &x) { return nda::reciprocal(x); })(std::forward<A>(a));
+    } else {
+      using real_t = remove_complex_t<get_value_t<A>>;
+      using numerator_t = std::conditional_t<std::is_floating_point_v<real_t>, real_t, double>;
+      return nda::map(detail::reciprocal_f<numerator_t>{numerator_t{1}})(std::forward<A>(a));
+    }
   }
 
   /**

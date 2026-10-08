@@ -149,7 +149,8 @@ namespace nda {
     return nda::map(detail::real_f{})(std::forward<A>(a));
   }
 
-  /// \brief Function abs2 for nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
+  /// \brief Squared absolute value for nda::ArrayOrScalar types (lazy and coefficient-wise for nda::Array types).
+  /// Floating-point inputs retain their real component type; integral inputs return double.
   ///
   /// \tparam A nda::ArrayOrScalar type.
   /// \param a nda::ArrayOrScalar object.
