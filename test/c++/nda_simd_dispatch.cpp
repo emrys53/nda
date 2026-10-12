@@ -339,4 +339,55 @@ TYPED_TEST(SIMDExpressions, RowContiguousViews) {
 }
 
 TYPED_TEST(SIMDExpressions, RowContiguousViewsMixedStrideOrder) { check_row_contiguous_views_mixed_stride_order<TypeParam>(); }
+
+// for_each_simd falls back to a scalar loop over multi-indices if the arrays cannot be looped over in SIMD-width
+// blocks, without instantiating f_simd (here it would not compile).
+TEST(SIMD, ForEachSimdScalarFallback) {
+  constexpr long n = 2 * native_simd<double>::size + 3;
+  auto no_simd     = []<typename... I>(I const &...) { static_assert(always_false<I...>, "f_simd must not be instantiated"); };
+  auto check       = [&](auto const &first, auto const &...rest) {
+    using idx_t = std::array<long, get_rank<decltype(first)>>;
+    std::vector<idx_t> visited, expected;
+    // the callable receives the arrays themselves (not copies), followed by the multi-index
+    if constexpr (sizeof...(rest) == 0) {
+      for_each_simd(no_simd, [&](auto const &x, auto const &...i) { EXPECT_EQ(&x, &first); visited.push_back({i...}); }, first);
+    } else {
+      for_each_simd(no_simd, [&](auto const &x, auto const &, auto const &...i) { EXPECT_EQ(&x, &first); visited.push_back({i...}); }, first,
+                    rest...);
+    }
+    nda::for_each(first.shape(), [&](auto const &...i) { expected.push_back({i...}); });
+    EXPECT_EQ(visited, expected);
+  };
+
+  array<double, 2> c(n, n);
+  array<double, 2, F_layout> f(n, n);
+  array<double, 1> d(n);
+  array<std::int64_t, 1> l(n);
+  array<long double, 1> ld(n);
+  check(c(range::all, range(0, n, 2))); // strided fastest dimension
+  check(c, f);                          // different stride orders
+  check(d, l);                          // different value types with the same SIMD width
+  static_assert(native_simd<double>::size == native_simd<std::int64_t>::size);
+  check(ld); // no native batch
+  static_assert(not Vectorizable<long double>);
+  check(map([](double x) { return x * x; })(d)); // functor without a load function
+
+  // the vectorized loop calls f_simd for every full block
+  long blocks = 0, elements = 0;
+  for_each_simd([&](auto const &...) { ++blocks; }, [&](auto const &...) { ++elements; }, d, d + d);
+  EXPECT_EQ(blocks, 2);
+  EXPECT_EQ(elements, 3);
+
+  // assignment relies on the fallback for different value types
+  for (long i = 0; i < n; ++i) { l(i) = i - 5; }
+  d = l;
+  for (long i = 0; i < n; ++i) { EXPECT_EQ(d(i), double(i - 5)); }
+
+  // frobenius_norm of arrays without SIMD loads (scalar nda::sum of nda::abs2)
+  array<long double, 2> ldm(2, n);
+  ldm = 0.5L;
+  c   = 0.5;
+  EXPECT_EQ(frobenius_norm(ldm), std::sqrt(0.25L * 2 * n)); // long double result, exact sum of squares
+  EXPECT_DOUBLE_EQ(frobenius_norm(c(range::all, range(0, n, 2))), std::sqrt(0.25 * n * ((n + 1) / 2)));
+}
 #endif

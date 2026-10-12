@@ -556,12 +556,8 @@ void assign_from_ndarray(RHS const &rhs) {
     NDA_RUNTIME_ERROR << "Error in assign_from_ndarray: Fallback to elementwise assignment not implemented for arrays/views on the GPU";
   }
 #ifdef NDA_HAVE_XSIMD
-  if constexpr (same_stride_order and is_simd_enabled_v<self_t> and is_simd_enabled_v<RHS, ValueType>) {
-    nda::for_each_simd([this, &rhs](auto const &...args) { (*this).store(rhs.load(args...), args...); },
-                       [this, &rhs](auto const &...args) { (*this)(args...) = rhs(args...); }, *this, rhs);
-  } else {
-    nda::for_each(shape(), [this, &rhs](auto const &...args) { (*this)(args...) = rhs(args...); });
-  }
+  nda::for_each_simd([](auto &dst, auto const &src, auto const &...i) { dst.store(src.load(i...), i...); },
+                     [](auto &dst, auto const &src, auto const &...i) { dst(i...) = src(i...); }, *this, rhs);
 #else
   nda::for_each(shape(), [this, &rhs](auto const &...args) { (*this)(args...) = rhs(args...); });
 #endif
