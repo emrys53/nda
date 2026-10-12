@@ -26,6 +26,7 @@
 #include <concepts>
 #include <cstdlib>
 #include <functional>
+#include <limits>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -120,10 +121,12 @@ namespace nda {
   namespace detail {
     // Reduce all elements of a SIMD-enabled array with `op` (combines two batches as well as two scalars) and fold the
     // lanes of the final batch with `reduce`. The flat loop keeps four accumulators to hide the latency of the chain.
-    template <Array A, typename T, typename Op, typename Reduce>
-    auto simd_reduce(A const &a, T init, Op op, Reduce reduce) {
+    // `identity` (`op(identity, x) == x`) fills the accumulator lanes, `init` is folded in once.
+    template <Array A, typename T>
+    // NOLINTNEXTLINE (we do not want to forward here)
+    auto simd_reduce(A const &a, auto &&op, auto &&reduce, T identity, std::type_identity_t<T> init) {
       using simd_t = native_simd<T>;
-      simd_t acc(init);
+      simd_t acc(identity);
       T r = init;
       if constexpr (has_contiguous_layout<A> and supports_flat_loop_v<A>) {
         constexpr long w = simd_t::size;
@@ -145,6 +148,13 @@ namespace nda {
       }
       return op(r, reduce(acc));
     }
+
+    // nda::detail::simd_reduce with `init = identity`.
+    template <Array A>
+    // NOLINTNEXTLINE (we do not want to forward here)
+    auto simd_reduce(A const &a, auto &&op, auto &&reduce, auto identity) {
+      return simd_reduce(a, op, reduce, identity, identity);
+    }
   } // namespace detail
 #endif // NDA_HAVE_XSIMD
 
@@ -164,7 +174,11 @@ namespace nda {
       return max(x, y);
     };
 #ifdef NDA_HAVE_XSIMD
-    if constexpr (is_simd_enabled_v<A>) { return detail::simd_reduce(a, get_first_element(a), max_f, [](auto const &b) { return xsimd::reduce_max(b); }); }
+    if constexpr (is_simd_enabled_v<A>) {
+      using T                 = get_value_t<A>;
+      constexpr auto identity = std::numeric_limits<T>::has_infinity ? T(-std::numeric_limits<T>::infinity()) : std::numeric_limits<T>::lowest();
+      return detail::simd_reduce(a, max_f, [](auto const &b) { return xsimd::reduce_max(b); }, identity, get_first_element(a));
+    }
 #endif
     return fold(max_f, a, get_first_element(a));
   }
@@ -185,7 +199,11 @@ namespace nda {
       return min(x, y);
     };
 #ifdef NDA_HAVE_XSIMD
-    if constexpr (is_simd_enabled_v<A>) { return detail::simd_reduce(a, get_first_element(a), min_f, [](auto const &b) { return xsimd::reduce_min(b); }); }
+    if constexpr (is_simd_enabled_v<A>) {
+      using T                 = get_value_t<A>;
+      constexpr auto identity = std::numeric_limits<T>::has_infinity ? std::numeric_limits<T>::infinity() : std::numeric_limits<T>::max();
+      return detail::simd_reduce(a, min_f, [](auto const &b) { return xsimd::reduce_min(b); }, identity, get_first_element(a));
+    }
 #endif
     return fold(min_f, a, get_first_element(a));
   }
@@ -203,7 +221,7 @@ namespace nda {
   {
     if constexpr (nda::Scalar<Value>) {
 #ifdef NDA_HAVE_XSIMD
-      if constexpr (is_simd_enabled_v<A>) { return detail::simd_reduce(a, Value{0}, std::plus<>{}, [](auto const &b) { return xsimd::reduce_add(b); }); }
+      if constexpr (is_simd_enabled_v<A>) { return detail::simd_reduce(a, std::plus<>{}, [](auto const &b) { return xsimd::reduce_add(b); }, Value{0}); }
 #endif
       return fold(std::plus<>{}, a);
     } else {
@@ -316,7 +334,7 @@ namespace nda {
   {
     if constexpr (nda::Scalar<Value>) {
 #ifdef NDA_HAVE_XSIMD
-      if constexpr (is_simd_enabled_v<A>) { return detail::simd_reduce(a, Value{1}, std::multiplies<>{}, [](auto const &b) { return xsimd::reduce_mul(b); }); }
+      if constexpr (is_simd_enabled_v<A>) { return detail::simd_reduce(a, std::multiplies<>{}, [](auto const &b) { return xsimd::reduce_mul(b); }, Value{1}); }
 #endif
       return fold(std::multiplies<>{}, a, Value{1});
     } else {

@@ -218,6 +218,11 @@ TYPED_TEST(SIMDDispatch, Reductions) {
     T total{};
     for (auto x : a) { total += x; }
     expect_simd_eq(sum(a), total);
+#ifdef NDA_HAVE_XSIMD
+    // init is folded in once, the identity fills the accumulator lanes
+    auto add = [](auto const &x) { return xsimd::reduce_add(x); };
+    expect_simd_eq(nda::detail::simd_reduce(a, std::plus<>{}, add, T{0}, T{5}), T{5} + total);
+#endif
 
     // a single distinguished element in each of the four accumulators, in the single-batch loop and in the tail catches
     // a dropped or repeated lane anywhere in the loop
@@ -226,6 +231,9 @@ TYPED_TEST(SIMDDispatch, Reductions) {
       a    = T{1};
       a(p) = T{3};
       expect_simd_eq(product(a), T{3});
+#ifdef NDA_HAVE_XSIMD
+      expect_simd_eq(nda::detail::simd_reduce(a, std::multiplies<>{}, [](auto const &x) { return xsimd::reduce_mul(x); }, T{1}, T{2}), T{6});
+#endif
       if constexpr (not is_complex_v<T>) {
         expect_simd_eq(max_element(a), T{3});
         a(p) = T{0};
@@ -245,6 +253,11 @@ TYPED_TEST(SIMDDispatch, Reductions) {
     using norm_t = decltype(frobenius_norm(m));
     expect_simd_eq(frobenius_norm(m), static_cast<norm_t>(frobenius(m)));
     expect_simd_eq(frobenius_norm(view), static_cast<norm_t>(frobenius(view)));
+#ifdef NDA_HAVE_XSIMD
+    T view_total{};
+    for (auto x : view) { view_total += x; }
+    expect_simd_eq(nda::detail::simd_reduce(view, std::plus<>{}, add, T{0}, T{5}), T{5} + view_total);
+#endif
   }
 }
 
