@@ -91,8 +91,8 @@ namespace {
 #endif
 
   // Assigns an expression to a rank-2 result and compares every element with expected(i, j).
-  template <typename R, typename E, typename F>
-  void check_assignment(R &result, E const &expression, F expected) {
+  template <typename R>
+  void check_assignment(R &result, auto const &expression, auto expected) {
     result = expression;
     for (long i = 0; i < result.extent(0); ++i) {
       for (long j = 0; j < result.extent(1); ++j) { expect_simd_eq(result(i, j), get_value_t<R>(expected(i, j))); }

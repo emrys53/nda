@@ -77,9 +77,8 @@ namespace nda {
       }
     }
 
-    template <int I, uint64_t StaticExtents, uint64_t StrideOrder, size_t SIMD_SIZE, typename F_SIMD, typename F_SCALAR, size_t R,
-              std::integral Int = long>
-    FORCEINLINE void for_each_static_impl(std::array<Int, R> const &shape, std::array<long, R> &idxs, F_SIMD &f_simd, F_SCALAR &f_scalar) {
+    template <int I, uint64_t StaticExtents, uint64_t StrideOrder, size_t SIMD_SIZE, size_t R, std::integral Int = long>
+    FORCEINLINE void for_each_static_impl(std::array<Int, R> const &shape, std::array<long, R> &idxs, auto &f_simd, auto &f_scalar) {
       // get the dimension over which to iterate and its extent
       static constexpr int J = index_from_stride_order<R>(StrideOrder, I);
       const long imax        = get_extent<J, R, StaticExtents>(shape);
@@ -132,8 +131,8 @@ namespace nda {
     detail::for_each_static_impl<0, StaticExtents, StrideOrder>(shape, idxs, f);
   }
 
-  template <uint64_t StaticExtents, uint64_t StrideOrder, size_t SIMD_SIZE, typename F_SIMD, typename F_SCALAR, auto R, std::integral Int = long>
-  FORCEINLINE void for_each_static(std::array<Int, R> const &shape, F_SIMD &&f_simd, F_SCALAR &&f_scalar) { // NOLINT (we do not want to forward here)
+  template <uint64_t StaticExtents, uint64_t StrideOrder, size_t SIMD_SIZE, auto R, std::integral Int = long>
+  FORCEINLINE void for_each_static(std::array<Int, R> const &shape, auto &&f_simd, auto &&f_scalar) { // NOLINT (we do not want to forward here)
     auto idxs = nda::stdutil::make_initialized_array<R>(0l);
     detail::for_each_static_impl<0, StaticExtents, StrideOrder, SIMD_SIZE>(shape, idxs, f_simd, f_scalar);
   }
@@ -159,10 +158,10 @@ namespace nda {
     detail::for_each_static_impl<0, 0, 0>(shape, idxs, f);
   }
 
-  template <size_t SIMD_SIZE, typename F_SIMD, typename F_SCALAR, auto R, std::integral Int = long>
-  FORCEINLINE void for_each(std::array<Int, R> const &shape, F_SIMD &&f_simd, F_SCALAR &&f_scalar) { // NOLINT
+  template <size_t SIMD_SIZE, auto R, std::integral Int = long>
+  FORCEINLINE void for_each(std::array<Int, R> const &shape, auto &&f_simd, auto &&f_scalar) { // NOLINT (we do not want to forward here)
     auto idxs = nda::stdutil::make_initialized_array<R>(0l);
-    detail::for_each_static_impl<0, 0, 0, SIMD_SIZE, F_SIMD, F_SCALAR>(shape, idxs, f_simd, f_scalar);
+    detail::for_each_static_impl<0, 0, 0, SIMD_SIZE>(shape, idxs, f_simd, f_scalar);
   }
 
 #ifdef NDA_HAVE_XSIMD

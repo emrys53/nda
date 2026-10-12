@@ -34,8 +34,8 @@ namespace nda::tensor {
     // yields a different expression type, hence the visitor instead of a return value. T is the tensor value type.
     // The scalars stay apart from x and y so that NORM_2 scales by std::norm(alpha) and PROD by alpha * beta once,
     // instead of multiplying every element, which for complex T is a full complex multiplication.
-    template <typename T, typename X, typename Y, typename F>
-    void visit_binary_expr(binary_op op, T alpha, X const &x, T beta, Y const &y, F &&f) {
+    template <typename T>
+    void visit_binary_expr(binary_op op, T alpha, auto const &x, T beta, auto const &y, auto &&f) {
       switch (op) {
         case binary_op::SUM: f(alpha * x + beta * y); return;
         case binary_op::PROD: f((alpha * beta) * nda::hadamard(x, y)); return;
@@ -61,8 +61,8 @@ namespace nda::tensor {
 
     // visit_binary_expr without alpha, for the second trinary operation whose x is the first result. Passing alpha = 1
     // instead would still multiply every element of x by one, since the value is only known at runtime.
-    template <typename T, typename X, typename Y, typename F>
-    void visit_binary_expr_unscaled(binary_op op, X const &x, T beta, Y const &y, F &&f) {
+    template <typename T>
+    void visit_binary_expr_unscaled(binary_op op, auto const &x, T beta, auto const &y, auto &&f) {
       switch (op) {
         case binary_op::SUM: f(x + beta * y); return;
         case binary_op::PROD: f(beta * nda::hadamard(x, y)); return;
@@ -87,8 +87,8 @@ namespace nda::tensor {
     }
 
     // out = op(alpha * a, beta * b)
-    template <typename A, typename B, typename Out>
-    void assign_binary(binary_op op, get_value_t<A> alpha, A const &a, get_value_t<A> beta, B const &b, Out &&out) { // NOLINT
+    template <typename A>
+    void assign_binary(binary_op op, get_value_t<A> alpha, A const &a, get_value_t<A> beta, auto const &b, auto &&out) { // NOLINT
       visit_binary_expr(op, alpha, a, beta, b, [&](auto const &e) { out = e; });
     }
   } // namespace detail
