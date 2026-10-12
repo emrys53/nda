@@ -140,7 +140,8 @@ namespace nda {
         for (; k + w <= n; k += w) { acc = op(acc, a.load(_linear_index_t{k})); }
         for (; k < n; ++k) { r = op(r, a(_linear_index_t{k})); }
       } else {
-        nda::for_each_simd([&](auto const &...i) { acc = op(acc, a.load(i...)); }, [&](auto const &...i) { r = op(r, a(i...)); }, a);
+        nda::for_each_simd([&](auto const &x, auto const &...i) { acc = op(acc, x.load(i...)); },
+                           [&](auto const &x, auto const &...i) { r = op(r, x(i...)); }, a);
       }
       return op(r, reduce(acc));
     }
