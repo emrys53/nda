@@ -190,47 +190,6 @@ namespace nda {
   }
 
   /**
-   * @ingroup av_math
-   * @brief Calculate the Frobenius norm of a 2-dimensional array.
-   *
-   * @tparam A nda::ArrayOfRank<2> type.
-   * @param a Array object.
-   * @return Frobenius norm of the array/matrix.
-   */
-template <ArrayOfRank<2> A>
-  double frobenius_norm(A const &a) {
-#ifdef NDA_HAVE_XSIMD
-    using value_t    = get_value_t<A>;
-    if constexpr (not is_simd_enabled_v<A> or sizeof(remove_complex_t<value_t>) < 4) {
-      return std::sqrt(fold([](double r, auto const &x) -> double { return r + static_cast<double>(std::norm(x)); }, a, double(0)));
-    } else {
-      using simd_t = native_simd<value_t>;
-      using acc_real_t = std::conditional_t<sizeof(remove_complex_t<value_t>) == 4, float, double>;
-      using acc_t      = native_simd<acc_real_t>;
-      acc_t r_simd(0);
-      auto f_simd = [&a, &r_simd](auto &&...args) {
-        simd_t const x = a.load(args...);
-        if constexpr (is_complex_v<value_t>) {
-          r_simd += xsimd::norm(x); // |z|^2 as a real batch
-        } else if constexpr (std::is_floating_point_v<value_t>) {
-          r_simd = xsimd::fma(x, x, r_simd);
-        } else {
-          // integer lanes -> floating-point lanes of the same width
-          auto const d = xsimd::batch_cast<acc_real_t>(x);
-          r_simd       = xsimd::fma(d, d, r_simd);
-        }
-      };
-      double r      = 0;
-      auto f_scalar = [&a, &r](auto &&...args) { r += static_cast<double>(std::norm(a(args...))); };
-      nda::for_each_simd(std::move(f_simd), std::move(f_scalar), a);
-      return std::sqrt(static_cast<double>(xsimd::reduce_add(r_simd)) + r);
-    }
-#else
-      return std::sqrt(fold([](double r, auto const &x) -> double { return r + static_cast<double>(std::norm(x)); }, a, double(0)));
-#endif
-  }
-
-  /**
    * @brief Sum all the elements of an nda::Array object.
    *
    * @tparam A nda::Array type.
@@ -250,6 +209,22 @@ template <ArrayOfRank<2> A>
       // Array<Value>
       return fold(std::plus<>{}, a, Value::zeros(get_first_element(a).shape()));
     }
+  }
+
+  /**
+   * @ingroup av_math
+   * @brief Calculate the Frobenius norm of a 2-dimensional array.
+   *
+   * @details It takes the square root of the sum of squared absolute values. The return type matches
+   * `std::norm` applied to a scalar element.
+   *
+   * @tparam A nda::ArrayOfRank<2> type.
+   * @param a Array object.
+   * @return Frobenius norm of the array/matrix.
+   */
+  template <ArrayOfRank<2> A>
+  auto frobenius_norm(A const &a) {
+    return std::sqrt(sum(abs2(a)));
   }
 
   /**
