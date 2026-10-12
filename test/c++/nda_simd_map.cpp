@@ -27,8 +27,8 @@ namespace {
     EXPECT_LE(abs(actual - expected), tolerance);
   }
 
-  template <typename E, typename A, typename F>
-  void check_expression(E const &expression, A const &input, F scalar) {
+  template <typename E>
+  void check_expression(E const &expression, auto const &input, auto scalar) {
     nda::array<nda::get_value_t<E>, 1> result = expression;
     for (long i = 0; i < input.size(); ++i) { expect_close(result(i), scalar(input(i))); }
   }

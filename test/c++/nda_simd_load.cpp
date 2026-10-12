@@ -73,8 +73,7 @@ namespace {
 
   template <typename T>
   struct scalar_f {
-    template <typename... Args>
-    T operator()(Args const &...args) const { return (args + ...) + T{1}; }
+    T operator()(auto const &...args) const { return (args + ...) + T{1}; }
   };
 
   template <typename T>
