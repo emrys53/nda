@@ -17,6 +17,7 @@
 #include "./layout/policies.hpp"
 #include "./mem/address_space.hpp"
 #include "./mem/policies.hpp"
+#include "./simd/simd_dispatch.hpp"
 #include "./traits.hpp"
 
 #include <array>

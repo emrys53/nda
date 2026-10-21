@@ -18,6 +18,7 @@
 #include "./macros.hpp"
 #include "./stdutil/complex.hpp"
 #include "./traits.hpp"
+#include "./simd/simd_concepts.hpp"
 
 #include <functional>
 #include <type_traits>
@@ -66,6 +67,21 @@ namespace nda {
     auto operator()(Args &&...args) const {
       return -a(std::forward<Args>(args)...);
     }
+
+#ifdef NDA_HAVE_XSIMD
+    /**
+     * @brief Evaluate the expression for a block of elements as a SIMD batch (batch counterpart of the function call
+     * operator, requires xsimd).
+     *
+     * @tparam Args Types of the multi-index or nda::_linear_index_t.
+     * @param args Index of the first element of the block.
+     * @return Negated nda::simd::native_simd batch of the operand.
+     */
+    template <typename... Args>
+    FORCEINLINE auto load(Args &&...args) const {
+      return -(a.load(std::forward<Args>(args)...));
+    }
+#endif // NDA_HAVE_XSIMD
 
     /**
      * @brief Get the shape of the nda::Array operand.
@@ -262,6 +278,140 @@ namespace nda {
       static_assert(get_rank<expr> == 1, "Error in nda::expr: Subscript operator only available for expressions of rank 1");
       return operator()(std::forward<Arg>(arg));
     }
+
+#ifdef NDA_HAVE_XSIMD
+    /**
+     * @brief Evaluate the expression for a block of elements as a SIMD batch (batch counterpart of the function call
+     * operator, requires xsimd).
+     *
+     * @details Loads the batches of the array operands at the given index and combines them with the operation. A
+     * scalar operand is broadcast as a batch of the expression's value type. For matrix +/- scalar, which only adds
+     * the scalar on the diagonal, the scalar is applied to the lane of the block that holds a diagonal element, if
+     * any. Whether a whole expression tree can be loaded is decided by nda::simd::has_load_function and
+     * nda::is_simd_enabled_v.
+     *
+     * @tparam Args Types of the multi-index or nda::_linear_index_t.
+     * @param args Index of the first element of the block.
+     * @return nda::simd::native_simd batch of the expression's value type.
+     */
+    template <typename... Args>
+    FORCEINLINE auto load(Args const &...args) const {
+      using value_t = get_value_t<expr>; // scalar operands are broadcast as batches of the expression's value type
+      // matrix +/- scalar only touches the diagonal: apply the scalar in the lane of the block starting at (i, j) that holds it, if any
+      auto diagonal_simd = [this](long i, long j) {
+        // only instantiated for matrix +/- scalar
+        if constexpr (sizeof...(Args) == 2 and (Vectorizable<L_t> or Vectorizable<R_t>) and ((get_algebra<L_t> == 'M' and r_is_scalar) or (get_algebra<R_t> == 'M' and l_is_scalar))) {
+
+          // lane of the diagonal element (C-layout: i - j, F-layout: j - i)
+          long diff = i - j;
+          if constexpr ((l_is_scalar and get_layout_info<R>.stride_order == Fortran_stride_order<2>)
+                        or (r_is_scalar and get_layout_info<L>.stride_order == Fortran_stride_order<2>)) {
+            diff = -diff;
+          }
+          if constexpr (l_is_scalar) {
+            using simd_t = simd::native_simd<value_t>;
+            auto v       = r.load(i, j);
+            if constexpr (OP == '-') { v = -v; }
+            if (static_cast<uint64_t>(diff) >= simd_t::size) { return v; } // no diagonal element in this block
+            auto const mask = simd_t::batch_bool_type::from_mask(uint64_t(1) << diff);
+            return xsimd::select(mask, simd_t(static_cast<value_t>(l)) + v, v);
+          } else if constexpr (r_is_scalar) {
+            using simd_t = simd::native_simd<value_t>;
+            auto const v = l.load(i, j);
+            if (static_cast<uint64_t>(diff) >= simd_t::size) { return v; }
+            auto const mask = simd_t::batch_bool_type::from_mask(uint64_t(1) << diff);
+            if constexpr (OP == '+') {
+              return xsimd::select(mask, v + simd_t(static_cast<value_t>(r)), v);
+            } else {
+              return xsimd::select(mask, v - simd_t(static_cast<value_t>(r)), v);
+            }
+          }
+        }
+      };
+      // addition
+      if constexpr (OP == '+') {
+        if constexpr (l_is_scalar) {
+          // lhs is a scalar
+          if constexpr (algebra == 'M') {
+            // rhs is a matrix
+            return diagonal_simd(args...);
+          } else {
+            // rhs is an array
+            return simd::native_simd<value_t>(static_cast<value_t>(l)) + r.load(args...);
+          }
+        } else if constexpr (r_is_scalar) {
+          // rhs is a scalar
+          if constexpr (algebra == 'M') {
+            // lhs is a matrix
+            return diagonal_simd(args...);
+          } else {
+            // lhs is an array
+            return l.load(args...) + simd::native_simd<value_t>(static_cast<value_t>(r));
+          }
+        } else {
+          // both are arrays or matrices
+          return l.load(args...) + r.load(args...);
+        }
+      }
+
+      // subtraction
+      if constexpr (OP == '-') {
+        if constexpr (l_is_scalar) {
+          // lhs is a scalar
+          if constexpr (algebra == 'M') {
+            // rhs is a matrix
+            return diagonal_simd(args...);
+          } else {
+            // rhs is an array
+            return simd::native_simd<value_t>(static_cast<value_t>(l)) - r.load(args...);
+          }
+        } else if constexpr (r_is_scalar) {
+          // rhs is a scalar
+          if constexpr (algebra == 'M') {
+            // lhs is a matrix
+            return diagonal_simd(args...);
+          } else {
+            // lhs is an array
+            return l.load(args...) - simd::native_simd<value_t>(static_cast<value_t>(r));
+          }
+        } else {
+          // both are arrays or matrices
+          return l.load(args...) - r.load(args...);
+        }
+      }
+
+      // multiplication
+      if constexpr (OP == '*') {
+        if constexpr (l_is_scalar) {
+          // lhs is a scalar
+          return simd::native_simd<value_t>(static_cast<value_t>(l)) * r.load(args...);
+        } else if constexpr (r_is_scalar) {
+          // rhs is a scalar
+          return l.load(args...) * simd::native_simd<value_t>(static_cast<value_t>(r));
+        } else {
+          // both are arrays (matrix product is not supported here)
+          static_assert(algebra != 'M', "Error in nda::expr: Matrix algebra not supported");
+          return l.load(args...) * r.load(args...);
+        }
+      }
+
+      // division
+      if constexpr (OP == '/') {
+        if constexpr (l_is_scalar) {
+          // lhs is a scalar
+          static_assert(algebra != 'M', "Error in nda::expr: Matrix algebra not supported");
+          return simd::native_simd<value_t>(static_cast<value_t>(l)) / r.load(args...);
+        } else if constexpr (r_is_scalar) {
+          // rhs is a scalar
+          return l.load(args...) / simd::native_simd<value_t>(static_cast<value_t>(r));
+        } else {
+          // both are arrays (matrix division is not supported here)
+          static_assert(algebra != 'M', "Error in nda::expr: Matrix algebra not supported");
+          return l.load(args...) / r.load(args...);
+        }
+      }
+    }
+#endif // NDA_HAVE_XSIMD
   };
 
   /**

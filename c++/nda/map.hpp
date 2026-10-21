@@ -103,7 +103,7 @@ namespace nda {
 
     // Implementation of the function call operator.
     template <size_t... Is, typename... Args>
-    [[gnu::always_inline]] [[nodiscard]] auto _call(std::index_sequence<Is...>, Args const &...args) const {
+    [[nodiscard]] FORCEINLINE auto _call(std::index_sequence<Is...>, Args const &...args) const {
       // if args contains a range, we need to return an expr_call on the resulting slice
       if constexpr ((is_range_or_ellipsis<Args> or ... or false)) {
         return mapped<F>{f}(std::get<Is>(a)(args...)...);
@@ -114,9 +114,17 @@ namespace nda {
 
     // Implementation of the subscript operator.
     template <size_t... Is, typename Arg>
-    [[gnu::always_inline]] auto _call_bra(std::index_sequence<Is...>, Arg const &arg) const {
+    FORCEINLINE auto _call_bra(std::index_sequence<Is...>, Arg const &arg) const {
       return f(std::get<Is>(a)[arg]...);
     }
+
+#ifdef NDA_HAVE_XSIMD
+    // Implementation of load operator.
+    template <size_t... Is, typename... Args>
+    FORCEINLINE auto _call_load(std::index_sequence<Is...>, Args const &...args) const {
+      return f.load(std::get<Is>(a).load(args...)...);
+    }
+#endif // NDA_HAVE_XSIMD
 
     public:
     /**
@@ -135,6 +143,25 @@ namespace nda {
     auto operator()(Args const &...args) const {
       return _call(std::make_index_sequence<sizeof...(As)>{}, args...);
     }
+
+#ifdef NDA_HAVE_XSIMD
+    /**
+     * @brief Evaluate the expression for a block of elements as a SIMD batch (batch counterpart of the function call
+     * operator, requires xsimd).
+     *
+     * @details Calls `f.load(...)` with the batches of the arguments at the given index. The callable therefore
+     * needs a `load` member for native batches (see nda::LoadWithNativeSimdTo), either hand-written or provided by
+     * nda::simd::mock_simd; whether a whole expression tree can be loaded is decided by nda::simd::has_load_function.
+     *
+     * @tparam Args Types of the multi-index or nda::_linear_index_t.
+     * @param args Index of the first element of the block.
+     * @return nda::simd::native_simd batch returned by `f.load`.
+     */
+    template <typename... Args>
+    FORCEINLINE auto load(Args const &...args) const {
+      return _call_load(std::make_index_sequence<sizeof...(As)>{}, args...);
+    }
+#endif // NDA_HAVE_XSIMD
 
     /**
      * @brief Subscript operator.

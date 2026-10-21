@@ -5,6 +5,9 @@
 
 #include "./simd_test_common.hpp"
 
+#include <nda/gtest_tools.hpp>
+#include <nda/simd/mock_simd.hpp>
+
 using namespace nda;
 
 namespace {
@@ -56,6 +59,44 @@ namespace {
     EXPECT_NO_THROW(a.load(_linear_index_t{a.size() - w}));
     EXPECT_THROW(a.load(_linear_index_t{a.size() - w + 1}), nda::runtime_error);
     EXPECT_THROW(a.store(x, _linear_index_t{a.size() - w + 1}), nda::runtime_error);
+
+    array_t b(shape), c(shape);
+    fill_random(b, 2, 0, 1000);
+    fill_random(c, 3, 1, 1000); // a divisor
+    check_load(b + c);
+    check_load(b - c);
+    if constexpr (Algebra == 'A') {
+      check_load(b * c);
+      check_load(b / c);
+    }
+  }
+
+  template <typename T>
+  struct scalar_f {
+    T operator()(auto const &...args) const { return (args + ...) + T{1}; }
+  };
+
+  template <typename T>
+  struct mock_f : simd::mock_simd<mock_f<T>, T>, scalar_f<T> {
+    using scalar_f<T>::operator();
+  };
+
+  template <typename T, int Rank, typename Layout>
+  void check_mock() {
+    auto const shape = stdutil::make_initialized_array<Rank>(32l);
+    array<T, Rank, Layout> a(shape), b(shape), c(shape);
+    fill_random(a, 1, 0, 1000);
+    fill_random(b, 2, 0, 1000);
+    fill_random(c, 3, 0, 1000);
+    auto check = [&](auto const &...inputs) {
+      auto mocked = map(mock_f<T>{})(inputs...);
+      auto scalar = map(scalar_f<T>{})(inputs...);
+      check_load(mocked);
+      EXPECT_ARRAY_EQ(make_regular(mocked), make_regular(scalar)); // lane-by-lane scalar calls give identical results
+    };
+    check(a);
+    check(a, b);
+    check(a, b, c);
   }
 
 } // namespace
@@ -74,4 +115,10 @@ TYPED_TEST(SIMDLoad, LoadStore) {
   check_load_store<TypeParam, 3, F_layout, 'A'>();
   check_load_store<TypeParam, 2, C_layout, 'M'>();
   check_load_store<TypeParam, 2, F_layout, 'M'>();
+}
+
+TYPED_TEST(SIMDLoad, Mock) {
+  check_mock<TypeParam, 1, C_layout>();
+  check_mock<TypeParam, 3, C_layout>();
+  check_mock<TypeParam, 3, F_layout>();
 }

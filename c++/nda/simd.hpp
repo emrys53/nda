@@ -1,0 +1,16 @@
+// Copyright (c) 2023--present, The Simons Foundation
+// This file is part of TRIQS/nda and is licensed under the Apache License, Version 2.0.
+// SPDX-License-Identifier: Apache-2.0
+// See LICENSE in the root of this distribution for details.
+
+/**
+ * @file
+ * @brief Includes all SIMD related headers.
+ */
+
+#pragma once
+
+#include "./simd/simd.hpp"
+#include "./simd/mock_simd.hpp"
+#include "./simd/simd_dispatch.hpp"
+#include "./simd/simd_concepts.hpp"
