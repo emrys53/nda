@@ -214,3 +214,48 @@ TYPED_TEST(SIMDExpressions, FlatLoop) {
   check_flat_loop<TypeParam, C_layout>();
   check_flat_loop<TypeParam, F_layout>();
 }
+
+#ifdef NDA_HAVE_XSIMD
+// for_each_simd falls back to a scalar loop over multi-indices if the arrays cannot be looped over in SIMD-width
+// blocks, without instantiating f_simd (here it would not compile).
+TEST(SIMD, ForEachSimdScalarFallback) {
+  constexpr long n = 2 * simd::native_simd<double>::size + 3;
+  auto no_simd     = []<typename... I>(I const &...) { static_assert(always_false<I...>, "f_simd must not be instantiated"); };
+  auto check       = [&](auto const &first, auto const &...rest) {
+    using idx_t = std::array<long, get_rank<decltype(first)>>;
+    std::vector<idx_t> visited, expected;
+    // the callable receives the arrays themselves (not copies), followed by the multi-index
+    if constexpr (sizeof...(rest) == 0) {
+      for_each_simd(no_simd, [&](auto const &x, auto const &...i) { EXPECT_EQ(&x, &first); visited.push_back({i...}); }, first);
+    } else {
+      for_each_simd(no_simd, [&](auto const &x, auto const &, auto const &...i) { EXPECT_EQ(&x, &first); visited.push_back({i...}); }, first,
+                    rest...);
+    }
+    nda::for_each(first.shape(), [&](auto const &...i) { expected.push_back({i...}); });
+    EXPECT_EQ(visited, expected);
+  };
+
+  array<double, 2> c(n, n);
+  array<double, 2, F_layout> f(n, n);
+  array<double, 1> d(n);
+  array<std::int64_t, 1> l(n);
+  array<long double, 1> ld(n);
+  check(c(range::all, range(0, n, 2))); // strided fastest dimension
+  check(c, f);                          // different stride orders
+  check(d, l);                          // different value types with the same SIMD width
+  static_assert(simd::native_simd<double>::size == simd::native_simd<std::int64_t>::size);
+  check(ld); // no native batch
+  static_assert(not Vectorizable<long double>);
+  check(map([](double x) { return x * x; })(d)); // functor without a load function
+}
+
+TEST(SIMD, ForEachSimdBatchesAndTail) {
+  constexpr long lanes = simd::native_simd<double>::size;
+  constexpr long n     = 2 * lanes + 3;
+  array<double, 1> d(n);
+  long blocks = 0, elements = 0;
+  for_each_simd([&](auto const &...) { ++blocks; }, [&](auto const &...) { ++elements; }, d, d + d);
+  EXPECT_EQ(blocks, n / lanes);
+  EXPECT_EQ(elements, n % lanes);
+}
+#endif
