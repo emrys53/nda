@@ -9,14 +9,13 @@ Needs matplotlib.
 import argparse
 import json
 import sys
+import textwrap
 from pathlib import Path
 
 import charts
 import common
 
-STEP = {'regression_signal': ('#c8321e', 'regression'), 'improvement_signal': ('#1f8a4c', 'improvement')}
-LABEL = {'regression_signal': 'regression', 'improvement_signal': 'improvement', 'inconclusive': '', 'too_noisy': 'too noisy',
-         'incomplete': 'incomplete'}
+STEP = {'regression': '#c8321e', 'improvement': '#1f8a4c'}  # the colour of a signalled step
 SPEEDUPS = (0.25, 0.4, 0.5, 0.67, 0.8, 0.9, 0.95, 1, 1.05, 1.1, 1.25, 1.5, 2, 3, 4, 6, 8)
 MAX_WIDTH = 12  # inches (1680 px at 140 dpi): the panels wrap into rows so a chart needs no horizontal scrolling
 
@@ -25,7 +24,7 @@ def families(cases):
     """{(suite, op, operands): {(value_type, N): case}} for the measured cases, operands in file-name form (A2+A2, M2s2)."""
     out = {}
     for case in cases:
-        if not case.get('rounds'):  # not measured (yet)
+        if not case.get('times_ns'):  # not measured (yet)
             continue
         f = common.case_factors(case['suite'], case['name'])
         operands = f['operands'].replace(' sliced', 's2').replace(', ', '+')
@@ -58,7 +57,7 @@ def draw_panel(ax, case, commits, settings, title, first_column, last_column):
     for i, sha in enumerate(measured):
         status = stats[sha].get('step', {}).get('status')
         if i and status in STEP:
-            ax.plot(x[i - 1:i + 1], y[i - 1:i + 1], color=STEP[status][0], lw=2.4, zorder=3)
+            ax.plot(x[i - 1:i + 1], y[i - 1:i + 1], color=STEP[status], lw=2.4, zorder=3)
     ax.errorbar(x, y, yerr=e, fmt='o', color=charts.INK, ms=3.5, ecolor=charts.INK2, elinewidth=0.8, capsize=2, zorder=4)
     for sha in measured:
         if stats[sha]['noise_percent'] > settings['max_noise_percent']:
@@ -66,8 +65,6 @@ def draw_panel(ax, case, commits, settings, title, first_column, last_column):
     for commit in commits:
         if commit['sha'] not in measured:
             ax.plot(position[commit['sha']], lo, marker='x', color=charts.MUTED, ms=6, clip_on=False, zorder=5)
-            if commit.get('build') == 'skipped':
-                continue
             label = 'build failed' if commit.get('build') == 'failed' else stats.get(commit['sha'], {}).get('status', 'case absent')
             ax.annotate(label.replace('_', ' '), (position[commit['sha']], lo), xytext=(0, 5), textcoords='offset points',
                         rotation=90, ha='center', va='bottom', fontsize=6, color=charts.MUTED)
@@ -101,7 +98,7 @@ def draw_family(path, family, panels, commits, settings):
     """One figure per family, one panel per case's history: by value type, then size N, in as many columns as fit
     MAX_WIDTH. A factor shared by every panel (the only value type, the only N) is named in the title; a panel is titled
     with what varies."""
-    plt = charts.pyplot()
+    plt = charts.plt
     suite, op, _ = family
     value_types = sorted({vt for vt, _ in panels}, key=common.value_type_key)
     sizes = sorted({n for _, n in panels})
@@ -110,63 +107,31 @@ def draw_family(path, family, panels, commits, settings):
     width = max(3.2, 0.22 * len(commits) + 1.4)  # room for one tilted hash per commit
     ncol = max(1, min(len(order), int((MAX_WIDTH - 0.6) // width)))
     nrow = -(-len(order) // ncol)
-    fig, axes = plt.subplots(nrow, ncol, figsize=(width * ncol + 0.6, 3.1 * nrow), squeeze=False)
-    for ax in axes.flat[len(order):]:
-        ax.axis('off')
+    figure_width = width * ncol + 0.6
+    legend_columns = 2 if figure_width >= 8 else 1
+    legend_height = 0.25 * (4 // legend_columns)
+    fig = plt.figure(figsize=(figure_width, 3.1 * nrow + legend_height + 0.8), constrained_layout=True)
+    grid = fig.add_gridspec(nrow + 1, ncol, height_ratios=[3.1] * nrow + [legend_height])
     for index, (vt, n) in enumerate(order):
+        ax = fig.add_subplot(grid[index // ncol, index % ncol])
         column = index % ncol
         varying = [common.value_type_label(vt)] * (len(value_types) > 1) + [f'N = {n}'] * (len(sizes) > 1)
-        draw_panel(axes.flat[index], panels[vt, n], commits, settings, ', '.join(varying),
+        draw_panel(ax, panels[vt, n], commits, settings, ', '.join(varying),
                    first_column=column == 0, last_column=column == ncol - 1 or index == len(order) - 1)
     floor = settings['min_improvement_percent']
-    # The title, the subtitle and the legend are measured and the figure is extended by what they need: a narrow figure
-    # (few sizes) wraps the texts and stacks the legend entries, a wide one lays everything out in a line.
     shared = [common.value_type_label(value_types[0])] * (len(value_types) == 1) + [f'N = {sizes[0]}'] * (len(sizes) == 1)
-    title = ', '.join(part.replace(' ', '\u00a0') for part in [f'{suite}: {op}({operands})'] + shared)  # breaks only at the commas
-    title = wrap_to_width(fig, title, 0.98 * fig.get_figwidth(), fontsize=11, fontweight='bold')
-    subtitle = wrap_to_width(fig, f"grey = within {floor:g}% of the first commit", 0.98 * fig.get_figwidth(), fontsize=7.5)
-    handles = [plt.Line2D([], [], color=colour, lw=2.4, label=f'{label} vs previous commit') for colour, label in STEP.values()]
+    title = ', '.join([f'{suite}: {op}({operands})'] + shared)
+    title = textwrap.fill(title, width=max(30, int(figure_width * 10)))
+    fig.suptitle(f'{title}\ngrey = within {floor:g}% of the first commit', fontsize=11)
+    handles = [plt.Line2D([], [], color=colour, lw=2.4, label=f'{status} vs previous commit') for status, colour in STEP.items()]
     handles.append(plt.Line2D([], [], marker='o', ls='', ms=5.5, mfc=charts.SURFACE, mec=charts.INK, label='too noisy for a verdict'))
-    handles.append(plt.Line2D([], [], marker='x', ls='', ms=6, color=charts.MUTED, label='not measured (skipped, build failed or case absent)'))
-    legend, legend_height = fit_legend(fig, handles, 7.5)
-    subtitle_top = 0.29 + 0.183 * (title.count('\n') + 1)  # inches from the top: below the title's lines
-    legend_top = subtitle_top + 0.125 * (subtitle.count('\n') + 1) + 0.05  # below the subtitle's lines
-    top = legend_top + legend_height + 0.15  # and a gap above the panels
-    height = fig.get_figheight() + top + 0.1
-    fig.set_figheight(height)
-    fig.suptitle(title, x=0.01, y=1 - 0.3 / height, ha='left', fontsize=11, fontweight='bold', in_layout=False)  # the rect has its room
-    fig.text(0.01, 1 - subtitle_top / height, subtitle, va='top', fontsize=7.5, color=charts.INK2)
-    legend.set_bbox_to_anchor((0.005, 1 - legend_top / height), transform=fig.transFigure)
-    fig.tight_layout(rect=(0, 0.1 / height, 1, 1 - top / height))
+    handles.append(plt.Line2D([], [], marker='x', ls='', ms=6, color=charts.MUTED, label='not measured (build failed, launch failed or case absent)'))
+    # A separate grid row lets Matplotlib lay out the legend without measuring text by hand.
+    legend_ax = fig.add_subplot(grid[-1, :])
+    legend_ax.axis('off')
+    legend_ax.legend(handles=handles, loc='center', ncol=legend_columns, frameon=False, fontsize=7.5)
     fig.savefig(path, dpi=140)
     plt.close(fig)
-
-
-def wrap_to_width(fig, text, width, **font):
-    """text broken at spaces into lines no wider than width inches in the given font, measured with the figure's renderer."""
-    renderer, probe = fig.canvas.get_renderer(), fig.text(0, 0, '', **font)
-    words, lines = text.split(' '), []
-    while words:
-        count = len(words)
-        while count > 1:
-            probe.set_text(' '.join(words[:count]))
-            if probe.get_window_extent(renderer).width <= width * fig.dpi:
-                break
-            count -= 1
-        lines.append(' '.join(words[:count]))
-        words = words[count:]
-    probe.remove()
-    return '\n'.join(lines)
-
-
-def fit_legend(fig, handles, fontsize):
-    renderer = fig.canvas.get_renderer()
-    for columns in range(len(handles), 0, -1):
-        legend = fig.legend(handles=handles, frameon=False, loc='upper left', ncol=columns, fontsize=fontsize)
-        extent = legend.get_window_extent(renderer)
-        if extent.width <= fig.get_figwidth() * fig.dpi or columns == 1:
-            return legend, extent.height / fig.dpi
-        legend.remove()
 
 
 def _cell(stat, gate):
@@ -176,21 +141,18 @@ def _cell(stat, gate):
     text = f"{stat['median_ns'] / 1000:.3g}"
     step = stat.get('step')
     if step and step['status'] in STEP:
-        text += f" ({LABEL[step['status']]} {step['median_ratio']:.2f}x)"
+        text += f" ({step['status']} {step['speedup']:.2f}x)"
     if stat['noise_percent'] > gate:
         text += ' (noisy)'
     return text
 
 
-def write_page(path, history, metadata, images):
-    commits, settings, machine = history['commits'], history['settings'], metadata['machine']
+def write_page(path, history, images):
+    commits, settings, machine = history['commits'], history['settings'], history['machine']
     short = {c['sha']: c['short'] for c in commits}
-    failed = [c for c in commits if c.get('build') == 'failed']
-    skipped = [c for c in commits if c.get('build') == 'skipped']
-    notes = ([f'{len(failed)} failed to build'] if failed else []) + \
-            ([f'{len(skipped)} skipped for lack of a benchmark_tracked preset'] if skipped else [])
+    failed = sum(c.get('build') == 'failed' for c in commits)
     L = [f"# Benchmark history: {commits[0]['short']} .. {commits[-1]['short']}", '',
-         f"{len(commits)} commits" + (f' ({", ".join(notes)})' if notes else '') + f", {len(images)} families; "
+         f"{len(commits)} commits" + (f' ({failed} failed to build)' if failed else '') + f", {len(images)} families; "
          f"{machine['cpu_model']}; {settings['rounds']} launches per commit and case, {settings['min_time']} each. "
          f"Speedups are baseline time / candidate time, median over the launches; a signal needs a change beyond "
          f"{settings['min_improvement_percent']:g}% at a one-sided false-positive rate of {100 * settings['alpha']:g}%; "
@@ -199,8 +161,7 @@ def write_page(path, history, metadata, images):
     for c in commits:
         note = c.get('build', '')
         if c.get('build_differences'):
-            note += '; ' + '; '.join(d['name'] + (f" ({d['detail']})" if 'detail' in d else f": {d['baseline']} -> {d['candidate']}")
-                                    for d in c['build_differences'])
+            note += '; ' + '; '.join(f'{name}: {detail}' for name, detail in c['build_differences'].items())
         L.append(f"| {c['short']} | {c['date']} | {c['subject']} | {note}{(': ' + c['error']) if c.get('error') else ''} |")
     L.append('')
 
@@ -210,15 +171,13 @@ def write_page(path, history, metadata, images):
             for sha, stat in case['per_commit'].items():
                 step = stat.get('step')
                 if step and step['status'] in STEP:
-                    verdict = step['verdict']
-                    t = verdict['t_statistic'] if step['status'] == 'improvement_signal' else verdict['regression_t_statistic']
-                    steps.append((abs(t), case, sha, step))
+                    steps.append((step['t'], case, sha, step))
     L += ['## Steps', '']
     if steps:
         L += ['Commits whose paired test against the previous measured commit signals, largest t first.', '',
               '| case | commit | vs previous | t |', '|:--|:--|--:|--:|']
         for t, case, sha, step in sorted(steps, key=lambda s: -s[0]):
-            L.append(f"| {case['suite']} {case['name']} | {short[sha]} | {step['median_ratio']:.2f}x ({LABEL[step['status']]}) | {t:.1f} |")
+            L.append(f"| {case['suite']} {case['name']} | {short[sha]} | {step['speedup']:.2f}x ({step['status']}) | {t:.1f} |")
     else:
         L += ['No step was signalled.']
     L.append('')
@@ -238,17 +197,16 @@ def write_page(path, history, metadata, images):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('results', type=Path, help='directory with the history.json and metadata.json of history.py')
+    parser.add_argument('results', type=Path, help='directory with the history.json of history.py')
     results = parser.parse_args(argv).results
     history = json.loads((results / 'history.json').read_text())
-    metadata = json.loads((results / 'metadata.json').read_text())
     images = []
     for family, panels in families(history['cases']).items():
         path = results / ('-'.join(family) + '.png')
         draw_family(path, family, panels, history['commits'], history['settings'])
         images.append((family, panels, path.name))
         print(path)
-    write_page(results / 'history.md', history, metadata, images)
+    write_page(results / 'history.md', history, images)
     print(results / 'history.md')
     return 0
 
