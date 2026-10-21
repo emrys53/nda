@@ -109,9 +109,6 @@ TEST(NDA, TraitsNDASpecific) {
   static_assert(nda::have_same_value_type_v<int, nda::vector<int>, nda::array_view<int, 2>>);
   static_assert(not nda::have_same_value_type_v<int, nda::vector<double>, nda::array_view<int, 2>>);
 
-  static_assert(nda::have_same_value_type_v<int, nda::vector<int>, nda::array_view<int, 2>>);
-  static_assert(not nda::have_same_value_type_v<int, nda::vector<double>, nda::array_view<int, 2>>);
-
   static_assert(nda::have_same_rank_v<nda::array<int, 2>, nda::array<double, 2>, nda::matrix<int>>);
   static_assert(not nda::have_same_rank_v<nda::array<int, 2>, nda::array<double, 2>, nda::vector<int>>);
 
