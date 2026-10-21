@@ -87,6 +87,29 @@ permutations and reductions are expressed in a uniform way independent of the ra
 - @ref tensor_utils provide supporting types and functions used by various tensor operations.
 - @ref tensor_ops collect the user-facing operations.
 
+## SIMD support
+
+With the CMake option `SIMDSupport=ON`, **nda** links [xsimd](https://github.com/xtensor-stack/xsimd) and evaluates
+suitable array expressions in SIMD batches (nda::simd::native_simd, the widest batch of the target architecture).
+Nothing changes in user code: the assignment `dst = expr` decides at compile time whether the expression qualifies
+(nda::is_simd_enabled_v) and evaluates it element by element otherwise, which is also what happens without xsimd.
+
+An expression qualifies if
+- every array operand has a value type with a native batch (nda::Vectorizable: the arithmetic types and
+`std::complex<float/double>`), a unit stride in its fastest dimension (nda::has_layout_smallest_stride_is_one, e.g.
+contiguous arrays and views such as `a(nda::range::all, 1, nda::range::all)`) and the same stride order as the
+destination,
+- every node produces the value type of the destination (a `double` scalar combined with a `float` array, or mixed
+array value types, keep the expression on the scalar path), and
+- every mapped function has a SIMD implementation for its argument types (nda::simd::mock_simd turns any scalar functor
+into a slow but SIMD-capable one).
+
+A SIMD assignment reads a block of elements before it writes it. Exact in-place updates such as `a = a + 1` are
+fine; other overlaps between the destination and an operand (a shifted view of the same buffer) are detected with
+nda::mem::may_alias and evaluated element by element, so that the result is the one of the scalar loop. The
+element-wise assignment traverses in the stride order of the destination, also without xsimd. nda::for_each_simd is
+the underlying blocked traversal and can be used directly.
+
 ## Memory layout
 
 @ref layout contains tools that allow us to specify how the data of a multi-dimensional array (nda::basic_array) or view

@@ -8,6 +8,7 @@
 #include <nda/simd/mock_simd.hpp>
 #include <nda/simd/simd_dispatch.hpp>
 
+#include <algorithm>
 #include <vector>
 
 using namespace nda;
@@ -215,6 +216,117 @@ TYPED_TEST(SIMDExpressions, FlatLoop) {
   check_flat_loop<TypeParam, F_layout>();
 }
 
+// The element-wise assignment traverses in the stride order of the destination (visible with a stateful functor).
+TEST(SIMD, AssignmentTraversalOrder) {
+  array<double, 2> c(2, 3);
+  array<double, 2, F_layout> f(2, 3);
+  int k        = 0;
+  auto counter = map([&k](double) { return double(k++); }); // no SIMD load: element by element
+  c            = counter(c);
+  EXPECT_EQ(c, (array<double, 2>{{0, 1, 2}, {3, 4, 5}}));
+  k = 0;
+  f = counter(f);
+  EXPECT_EQ(f, (array<double, 2>{{0, 2, 4}, {1, 3, 5}}));
+}
+
+#ifdef NDA_HAVE_XSIMD
+namespace {
+
+  template <typename T, typename Layout>
+  void check_row_contiguous_views() {
+    constexpr long lanes = simd::native_simd<T>::size;
+    for (long n : {lanes - 1, 2 * lanes + 3}) {
+      array<T, 3, Layout> t(n, 3, n), other(n, 3, n), full(n, 3, n);
+      fill_random(t, 1, -1000, 1000);
+      fill_random(other, 2, -1000, 1000);
+      full = T(-1);
+      auto tv = t(range::all, 1, range::all);
+      auto ov = other(range::all, 1, range::all);
+      auto fv = full(range::all, 1, range::all);
+      array<T, 2, Layout> c(n, n), result(n, n);
+      c = T(3);
+
+      static_assert(not has_contiguous_layout<decltype(tv)>);
+      static_assert(has_layout_smallest_stride_is_one<decltype(tv)>);
+      static_assert(supports_flat_loop_v<decltype(tv)>);
+      check_dispatch<true, true>(tv);
+      check_dispatch<true, true>(tv * ov + tv);
+      check_dispatch<true, true>(tv + c);
+      check_dispatch<true, true>(-(tv - ov) * T{2});
+      if constexpr (array<T, 3, Layout>::layout_t::is_stride_order_C()) {
+        check_dispatch<true, false>(t(range::all, range::all, 0));
+      } else {
+        check_dispatch<true, false>(t(0, range::all, range::all));
+      }
+
+      check_assignment(fv, tv * ov + tv, [&](long i, long k) { return t(i, 1, k) * other(i, 1, k) + t(i, 1, k); });
+      check_assignment(fv, tv + c, [&](long i, long k) { return t(i, 1, k) + T(3); });
+      check_assignment(fv, -(tv - ov) * T{2}, [&](long i, long k) { return -(t(i, 1, k) - other(i, 1, k)) * T{2}; });
+      check_assignment(result, tv - ov, [&](long i, long k) { return t(i, 1, k) - other(i, 1, k); });
+      // the planes next to the assigned one are untouched
+      for (auto x : full(range::all, 0, range::all)) { expect_simd_eq(x, T(-1)); }
+      for (auto x : full(range::all, 2, range::all)) { expect_simd_eq(x, T(-1)); }
+    }
+  }
+
+  template <typename T>
+  void check_row_contiguous_views_mixed_stride_order() {
+    constexpr long n = 2 * simd::native_simd<T>::size + 3;
+    array<T, 3> c(n, 3, n);
+    array<T, 3, F_layout> f(n, 3, n);
+    fill_random(c, 1, -1000, 1000);
+    fill_random(f, 2, -1000, 1000);
+    auto cv  = c(range::all, 1, range::all);
+    auto fv  = f(range::all, 1, range::all);
+    auto cvt = transpose(cv);
+    array<T, 2> rc(n, n);
+    array<T, 2, F_layout> rf(n, n);
+
+    static_assert(has_layout_smallest_stride_is_one<decltype(fv)> and has_layout_smallest_stride_is_one<decltype(cvt)>);
+    static_assert(get_layout_info<decltype(cv)>.stride_order != get_layout_info<decltype(fv)>.stride_order);
+    check_dispatch<true, true>(cv + cv);
+    check_dispatch<true, true>(fv + fv);
+    check_dispatch<true, true>(cvt + cvt);
+    check_dispatch<true, false>(cv + fv);
+    check_dispatch<true, false>(cv + cvt);
+    check_dispatch<true, false>(cv * fv - cvt);
+
+    check_assignment(rc, cv + fv, [&](long i, long k) { return c(i, 1, k) + f(i, 1, k); });
+    check_assignment(rf, cv + fv, [&](long i, long k) { return c(i, 1, k) + f(i, 1, k); });
+    check_assignment(rf, cv + cv, [&](long i, long k) { return T{2} * c(i, 1, k); });
+    check_assignment(rc, cv + cvt, [&](long i, long k) { return c(i, 1, k) + c(k, 1, i); });
+    check_assignment(rf, cvt * fv, [&](long i, long k) { return c(k, 1, i) * f(i, 1, k); });
+  }
+
+} // namespace
+
+TYPED_TEST(SIMDExpressions, RowContiguousViews) {
+  check_row_contiguous_views<TypeParam, C_layout>();
+  check_row_contiguous_views<TypeParam, F_layout>();
+}
+
+TYPED_TEST(SIMDExpressions, RowContiguousViewsMixedStrideOrder) { check_row_contiguous_views_mixed_stride_order<TypeParam>(); }
+
+// An operand that overlaps the destination other than exactly in place is evaluated element by element, so the
+// result does not depend on the batch width; the exact in-place update takes the SIMD path.
+TEST(SIMD, OverlappingAssignment) {
+  constexpr long w = simd::native_simd<double>::size;
+  constexpr long n = 2 * w + 5;
+  array<double, 1> buffer(n + 1);
+  buffer = 0.0;
+  array_contiguous_view<double, 1> src{{n}, buffer.data()}, dst{{n}, buffer.data() + 1}; // dst is src shifted by one
+  static_assert(is_simd_enabled_v<decltype(src + 1.0)>);
+  EXPECT_TRUE(mem::may_alias(dst, src + 1.0));
+  dst = src + 1.0; // every element sees the element before it, which was just written
+  for (long i = 0; i <= n; ++i) { EXPECT_EQ(buffer(i), double(i)); }
+
+  auto whole = buffer();
+  EXPECT_FALSE(mem::may_alias(whole, whole * 2.0));
+  whole = whole * 2.0;
+  for (long i = 0; i <= n; ++i) { EXPECT_EQ(buffer(i), 2.0 * double(i)); }
+}
+#endif
+
 #ifdef NDA_HAVE_XSIMD
 // for_each_simd falls back to a scalar loop over multi-indices if the arrays cannot be looped over in SIMD-width
 // blocks, without instantiating f_simd (here it would not compile).
@@ -257,5 +369,15 @@ TEST(SIMD, ForEachSimdBatchesAndTail) {
   for_each_simd([&](auto const &...) { ++blocks; }, [&](auto const &...) { ++elements; }, d, d + d);
   EXPECT_EQ(blocks, n / lanes);
   EXPECT_EQ(elements, n % lanes);
+}
+
+TEST(SIMD, ScalarFallbackResults) {
+  constexpr long n = 2 * simd::native_simd<double>::size + 3;
+  array<double, 1> d(n);
+  array<std::int64_t, 1> l(n);
+  // Assignment between different value types.
+  for (long i = 0; i < n; ++i) { l(i) = i - 5; }
+  d = l;
+  for (long i = 0; i < n; ++i) { EXPECT_EQ(d(i), double(i - 5)); }
 }
 #endif
