@@ -290,7 +290,7 @@ namespace nda {
   template <Array A, Array B>
     requires(nda::get_rank<A> == nda::get_rank<B>)
   [[nodiscard]] constexpr auto hadamard(A &&a, B &&b) {
-    return nda::map([](auto const &x, auto const &y) { return x * y; })(std::forward<A>(a), std::forward<B>(b));
+    return nda::map(detail::mul_f{})(std::forward<A>(a), std::forward<B>(b));
   }
 
   /**

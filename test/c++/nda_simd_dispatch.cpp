@@ -253,6 +253,7 @@ namespace {
       check_dispatch<true, true>(tv * ov + tv);
       check_dispatch<true, true>(tv + c);
       check_dispatch<true, true>(-(tv - ov) * T{2});
+      check_dispatch<true, true>(abs(tv));
       if constexpr (array<T, 3, Layout>::layout_t::is_stride_order_C()) {
         check_dispatch<true, false>(t(range::all, range::all, 0));
       } else {

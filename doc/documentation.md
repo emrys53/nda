@@ -101,8 +101,13 @@ contiguous arrays and views such as `a(nda::range::all, 1, nda::range::all)`) an
 destination,
 - every node produces the value type of the destination (a `double` scalar combined with a `float` array, or mixed
 array value types, keep the expression on the scalar path), and
-- every mapped function has a SIMD implementation for its argument types (nda::simd::mock_simd turns any scalar functor
-into a slow but SIMD-capable one).
+- every mapped function has a SIMD implementation for its argument types: the @ref av_math (`abs`, `exp`, `pow`, ...)
+have one for `float`, `double` and their complex types where xsimd provides the function (`abs`, `max` and `min` also
+for integers), `real`, `imag`, `abs` and `abs2` of complex arrays produce real batches of the same width, and
+nda::simd::mock_simd turns any scalar functor into a slow but SIMD-capable one. The batch implementations are
+xsimd's, so results can differ from the C library's in the last bits and in special cases (`pow(0, 0)`, the
+subnormal range of `exp` and `log`, complex branch cuts). A function applied to a type without a SIMD
+implementation keeps the expression on the scalar path.
 
 A SIMD assignment reads a block of elements before it writes it. Exact in-place updates such as `a = a + 1` are
 fine; other overlaps between the destination and an operand (a shifted view of the same buffer) are detected with
