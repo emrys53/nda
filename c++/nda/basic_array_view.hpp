@@ -16,6 +16,7 @@
 #include "./declarations.hpp"
 #include "./device.hpp"
 #include "./iterators.hpp"
+#include "./layout/bound_check_worker.hpp"
 #include "./layout/for_each.hpp"
 #include "./layout/idx_map.hpp"
 #include "./layout/permutation.hpp"
@@ -28,6 +29,7 @@
 #include "./mem/memcpy.hpp"
 #include "./mem/memset.hpp"
 #include "./mem/policies.hpp"
+#include "./simd/simd_concepts.hpp"
 #include "./traits.hpp"
 
 #include <itertools/itertools.hpp>
