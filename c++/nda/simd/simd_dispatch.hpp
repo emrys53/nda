@@ -10,6 +10,7 @@
 
 #pragma once
 #include "../concepts.hpp"
+#include "./simd_concepts.hpp"
 
 #include <type_traits>
 
@@ -72,7 +73,7 @@ namespace nda {
      */
 
     /**
-     * @brief Check if an expression tree can be loaded as a `native_simd<T_in>` batch using only native SIMD loads.
+     * @brief Check if an expression tree can be loaded as a `nda::simd::native_simd<T_in>` batch using only native SIMD loads.
      *
      * @details Every node must produce the value type `T` it is asked for:
      * - arrays/views: `T` must be nda::Vectorizable,

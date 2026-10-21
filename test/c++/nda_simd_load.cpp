@@ -26,7 +26,7 @@ namespace {
 
   template <typename T, int Rank, typename Layout, char Algebra>
   void check_load_store() {
-    constexpr long w = native_simd<T>::size;
+    constexpr long w = simd::native_simd<T>::size;
     auto const shape = stdutil::make_initialized_array<Rank>(32l);
     using array_t = basic_array<T, Rank, Layout, Algebra, heap<>>;
     array_t a(shape);

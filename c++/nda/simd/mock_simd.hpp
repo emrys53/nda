@@ -4,7 +4,12 @@
 // See LICENSE in the root of this distribution for details.
 
 #pragma once
-#include "../concepts.hpp"
+#include "../macros.hpp"
+#include "./simd_concepts.hpp"
+
+#include <array>
+#include <tuple>
+#include <utility>
 
 #ifdef NDA_HAVE_XSIMD
 

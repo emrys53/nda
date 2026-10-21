@@ -161,7 +161,7 @@ namespace {
 } // namespace
 
 TEST(SIMD, LoadConstraints) {
-  // a load takes native_simd<T> batches only, so a scalar argument is rejected by the signature
+  // a load takes simd::native_simd<T> batches only, so a scalar argument is rejected by the signature
   static_assert(not unary_loadable<nda::detail::conj_f, double>);
   static_assert(not unary_loadable<nda::detail::real_f, std::complex<double>>);
   // same-type loads that must be rejected by the signature (unsupported value types or domains)
@@ -194,7 +194,7 @@ TEST(SIMD, LoadConstraints) {
   // A load that changes the SIMD width (double -> float batches) must not be dispatched natively.
   struct narrowing_f {
     float operator()(double x) const { return static_cast<float>(x); }
-    [[nodiscard]] nda::native_simd<float> load(nda::native_simd<double> const &) const { return {0.f}; }
+    [[nodiscard]] nda::simd::native_simd<float> load(nda::simd::native_simd<double> const &) const { return {0.f}; }
   };
   static_assert(nda::LoadWithNativeSimdTo<narrowing_f, float, double>);
   using narrowing_expr = decltype(nda::map(narrowing_f{})(std::declval<nda::array<double, 1> &>()));
@@ -202,9 +202,9 @@ TEST(SIMD, LoadConstraints) {
   static_assert(not nda::is_simd_enabled_v<narrowing_expr>);
 
   // These probes must reject the signature without instantiating an unsupported mathematical body.
-  static_assert(not unary_loadable<nda::detail::floor_f, nda::native_simd<std::complex<double>>>);
-  static_assert(not unary_loadable<nda::detail::exp_f, nda::native_simd<int>>);
-  static_assert(not unary_loadable<nda::detail::abs_f, nda::native_simd<unsigned int>>);
+  static_assert(not unary_loadable<nda::detail::floor_f, nda::simd::native_simd<std::complex<double>>>);
+  static_assert(not unary_loadable<nda::detail::exp_f, nda::simd::native_simd<int>>);
+  static_assert(not unary_loadable<nda::detail::abs_f, nda::simd::native_simd<unsigned int>>);
   static_assert(nda::LoadWithNativeSimdTo<nda::detail::exp_f, double, double>);
 }
 #endif

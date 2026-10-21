@@ -9,7 +9,7 @@
 
 #include <xsimd/xsimd.hpp>
 
-namespace nda {
+namespace nda::simd {
 
   /// Native SIMD batch of the plain scalar type `T` (transparent alias, so `T` is deducible from a batch argument).
   template <typename T>
@@ -19,6 +19,6 @@ namespace nda {
   template <typename T, size_t Width>
   using fixed_size_simd = xsimd::make_sized_batch_t<T, Width>;
 
-} // namespace nda
+} // namespace nda::simd
 
 #endif // NDA_HAVE_XSIMD

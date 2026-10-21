@@ -10,6 +10,7 @@
 
 #pragma once
 
+#include "../concepts.hpp"
 #include "./simd.hpp"
 
 #include <concepts>
@@ -33,18 +34,13 @@ namespace nda {
   /// Check if native SIMD batches of the result and all argument types have the same number of lanes.
   template <typename Out, typename... In>
   concept SimdPreservesLaneWidth = Vectorizable<Out> and (Vectorizable<In> and ...)
-     and ((native_simd<std::remove_cvref_t<Out>>::size == native_simd<std::remove_cvref_t<In>>::size) and ...);
-
-  namespace simd {
-    template <typename Derived, Vectorizable T>
-    struct mock_simd;
-  }
+     and ((simd::native_simd<std::remove_cvref_t<Out>>::size == simd::native_simd<std::remove_cvref_t<In>>::size) and ...);
 
   /**
    * @brief Check if `F::load` maps native SIMD batches of `In...` to a native SIMD batch of `Out`.
    *
-   * @details The types may differ, e.g. `abs` maps a complex batch to a real batch. A callable derived from
-   * nda::simd::mock_simd only qualifies for equal types.
+   * @details The types may differ, e.g. `abs` maps a complex batch to a real batch. `Out` must also be the result
+   * type of the scalar call `f(in...)`, so that the SIMD and the scalar path produce the same type.
    *
    * @tparam F Callable type.
    * @tparam Out Scalar result type.
@@ -52,9 +48,11 @@ namespace nda {
    */
   template <typename F, typename Out, typename... In>
   concept LoadWithNativeSimdTo = Vectorizable<Out> and (Vectorizable<In> and ...)
-     and (requires(F const &f, native_simd<In> const &...xs) {
-           { f.load(xs...) } -> std::same_as<native_simd<Out>>;
-         } or (std::is_base_of_v<simd::mock_simd<F, Out>, F> and (std::same_as<std::remove_cvref_t<Out>, std::remove_cvref_t<In>> and ...)));
+     and requires(F const &f, simd::native_simd<In> const &...xs) {
+           { f.load(xs...) } -> std::same_as<simd::native_simd<Out>>;
+         }
+     // the batch result must match the scalar result; checked last so that unsupported scalar bodies are never instantiated
+     and std::same_as<std::remove_cvref_t<std::invoke_result_t<F const &, In const &...>>, std::remove_cvref_t<Out>>;
 #else
   // Without xsimd no type is vectorizable, so all SIMD dispatch degrades to the scalar path.
   template <typename S>
@@ -66,6 +64,26 @@ namespace nda {
   template <typename F, typename Out, typename... In>
   concept LoadWithNativeSimdTo = false;
 #endif
+
+  /// Check if a scalar type is arithmetic and has a native SIMD batch.
+  template <typename T>
+  concept SimdArithmetic = Vectorizable<T> and std::is_arithmetic_v<std::remove_cvref_t<T>>;
+
+  /// Check if an arithmetic scalar type is signed and has a native SIMD batch.
+  template <typename T>
+  concept SimdSigned = SimdArithmetic<T> and std::is_signed_v<std::remove_cvref_t<T>>;
+
+  /// Check if a scalar type is float or double and has a native SIMD batch.
+  template <typename T>
+  concept SimdReal = Vectorizable<T> and FloatOrDouble<T>;
+
+  /// Check if a scalar type is complex float or complex double and has a native SIMD batch.
+  template <typename T>
+  concept SimdComplex = Vectorizable<T> and is_complex_v<T> and SimdReal<remove_complex_t<T>>;
+
+  /// Check if a scalar type is float, double or their complex counterparts and has a native SIMD batch.
+  template <typename T>
+  concept SimdRealOrComplex = SimdReal<T> or SimdComplex<T>;
 
   /** @} */
 

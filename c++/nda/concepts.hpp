@@ -12,7 +12,6 @@
 
 #include "./stdutil/concepts.hpp"
 #include "./traits.hpp"
-#include "./simd/simd_concepts.hpp"
 
 #include <array>
 #include <concepts>
@@ -96,32 +95,6 @@ namespace nda {
    */
   template <typename S>
   concept FloatOrDouble = std::same_as<float, std::remove_cvref_t<S>> or std::same_as<double, std::remove_cvref_t<S>>;
-
-  /// Check if a scalar type is arithmetic and has a native SIMD batch.
-  template <typename T>
-  concept SimdArithmetic = Vectorizable<T> and std::is_arithmetic_v<std::remove_cvref_t<T>>;
-
-  /// Check if an arithmetic scalar type is signed and has a native SIMD batch.
-  template <typename T>
-  concept SimdSigned = SimdArithmetic<T> and std::is_signed_v<std::remove_cvref_t<T>>;
-
-  /// Check if a scalar type is float or double and has a native SIMD batch.
-  template <typename T>
-  concept SimdReal = Vectorizable<T> and FloatOrDouble<T>;
-
-  /// Check if a scalar type is complex float or complex double and has a native SIMD batch.
-  template <typename T>
-  concept SimdComplex = Vectorizable<T> and is_complex_v<T> and SimdReal<remove_complex_t<T>>;
-
-  /// Check if a scalar type is float, double or their complex counterparts and has a native SIMD batch.
-  template <typename T>
-  concept SimdRealOrComplex = SimdReal<T> or SimdComplex<T>;
-
-  /// Check if a scalar callable returns the same type as its argument.
-  template <typename F, typename T>
-  concept PreservesScalarType = requires(F const &f, T const &x) {
-    { f(x) } -> std::same_as<T>;
-  };
 
   /**
    * @brief Check if a given type is an instantiation of some other template type.

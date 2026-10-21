@@ -186,10 +186,11 @@ namespace nda {
     EXPECTS(((first.shape() == rest.shape()) and ...));
     constexpr auto simd_loop = is_simd_enabled_v<First> and (is_simd_enabled_v<Rest, get_value_t<First>> and ...)
        and ((get_layout_info<First>.stride_order == get_layout_info<Rest>.stride_order) and ...);
+    constexpr auto lhs_stride_order = get_layout_info<First>.stride_order;
     if constexpr (not simd_loop) {
-      for_each(first.shape(), [&](auto const &...idx) { f_scalar(first, rest..., idx...); });
+      for_each_static<0, lhs_stride_order>(first.shape(), [&](auto const &...idx) { f_scalar(first, rest..., idx...); });
     } else {
-      constexpr auto simd_size = native_simd<get_value_t<First>>::size;
+      constexpr auto simd_size = simd::native_simd<get_value_t<First>>::size;
       constexpr auto flat_loop = has_contiguous_layout<First> and (has_contiguous_layout<Rest> and ...)
          and supports_flat_loop_v<First> and (supports_flat_loop_v<Rest> and ...);
       if constexpr (flat_loop) {
@@ -199,7 +200,7 @@ namespace nda {
         for (; k < nlim; k += simd_size) { f_simd(first, rest..., _linear_index_t{k}); }
         for (; k < n; ++k) { f_scalar(first, rest..., _linear_index_t{k}); }
       } else {
-        for_each_static<0, get_layout_info<First>.stride_order, simd_size>(
+        for_each_static<0, lhs_stride_order, simd_size>(
            first.shape(), [&](auto const &...idx) { f_simd(first, rest..., idx...); }, [&](auto const &...idx) { f_scalar(first, rest..., idx...); });
       }
     }

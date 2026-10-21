@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <complex>
 #include <functional>
 #include <limits>
@@ -74,6 +75,11 @@ TEST_F(NDAAlgorithm, Sum) {
 
   auto A_arr = nda::array<decltype(A_d), 1>{A_d, A_d};
   EXPECT_ARRAY_EQ(nda::sum(A_arr), A_d + A_d);
+
+  // an explicit Value is the accumulator type: this sum overflows int, but not long
+  nda::array<int, 1> A_i(100);
+  A_i = 30000000;
+  EXPECT_EQ((nda::sum<decltype(A_i), long>(A_i)), 3000000000L);
 }
 
 TEST_F(NDAAlgorithm, SumOverAxis) {
@@ -138,6 +144,11 @@ TEST_F(NDAAlgorithm, Product) {
   auto Id    = nda::eye<double>(2);
   auto A_mat = nda::array<decltype(Id), 1>{Id, Id};
   EXPECT_ARRAY_EQ(nda::product(A_mat), Id);
+
+  // an explicit Value is the accumulator type: this product underflows float, but not double
+  nda::array<float, 1> A_f(200);
+  A_f = 0.5f;
+  EXPECT_DOUBLE_EQ((nda::product<decltype(A_f), double>(A_f)), std::pow(0.5, 200));
 }
 
 TEST_F(NDAAlgorithm, CustomFold) {

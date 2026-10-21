@@ -18,7 +18,7 @@
 #include "./macros.hpp"
 #include "./stdutil/complex.hpp"
 #include "./traits.hpp"
-#include "./simd.hpp"
+#include "./simd/simd_concepts.hpp"
 
 #include <functional>
 #include <type_traits>
@@ -287,14 +287,14 @@ namespace nda {
             diff = -diff;
           }
           if constexpr (l_is_scalar) {
-            using simd_t = native_simd<value_t>;
+            using simd_t = simd::native_simd<value_t>;
             auto v       = r.load(i, j);
             if constexpr (OP == '-') { v = -v; }
             if (static_cast<uint64_t>(diff) >= simd_t::size) { return v; } // no diagonal element in this block
             auto const mask = simd_t::batch_bool_type::from_mask(uint64_t(1) << diff);
             return xsimd::select(mask, simd_t(static_cast<value_t>(l)) + v, v);
           } else if constexpr (r_is_scalar) {
-            using simd_t = native_simd<value_t>;
+            using simd_t = simd::native_simd<value_t>;
             auto const v = l.load(i, j);
             if (static_cast<uint64_t>(diff) >= simd_t::size) { return v; }
             auto const mask = simd_t::batch_bool_type::from_mask(uint64_t(1) << diff);
@@ -315,7 +315,7 @@ namespace nda {
             return diagonal_simd(args...);
           } else {
             // rhs is an array
-            return native_simd<value_t>(static_cast<value_t>(l)) + r.load(args...);
+            return simd::native_simd<value_t>(static_cast<value_t>(l)) + r.load(args...);
           }
         } else if constexpr (r_is_scalar) {
           // rhs is a scalar
@@ -324,7 +324,7 @@ namespace nda {
             return diagonal_simd(args...);
           } else {
             // lhs is an array
-            return l.load(args...) + native_simd<value_t>(static_cast<value_t>(r));
+            return l.load(args...) + simd::native_simd<value_t>(static_cast<value_t>(r));
           }
         } else {
           // both are arrays or matrices
@@ -341,7 +341,7 @@ namespace nda {
             return diagonal_simd(args...);
           } else {
             // rhs is an array
-            return native_simd<value_t>(static_cast<value_t>(l)) - r.load(args...);
+            return simd::native_simd<value_t>(static_cast<value_t>(l)) - r.load(args...);
           }
         } else if constexpr (r_is_scalar) {
           // rhs is a scalar
@@ -350,7 +350,7 @@ namespace nda {
             return diagonal_simd(args...);
           } else {
             // lhs is an array
-            return l.load(args...) - native_simd<value_t>(static_cast<value_t>(r));
+            return l.load(args...) - simd::native_simd<value_t>(static_cast<value_t>(r));
           }
         } else {
           // both are arrays or matrices
@@ -362,10 +362,10 @@ namespace nda {
       if constexpr (OP == '*') {
         if constexpr (l_is_scalar) {
           // lhs is a scalar
-          return native_simd<value_t>(static_cast<value_t>(l)) * r.load(args...);
+          return simd::native_simd<value_t>(static_cast<value_t>(l)) * r.load(args...);
         } else if constexpr (r_is_scalar) {
           // rhs is a scalar
-          return l.load(args...) * native_simd<value_t>(static_cast<value_t>(r));
+          return l.load(args...) * simd::native_simd<value_t>(static_cast<value_t>(r));
         } else {
           // both are arrays (matrix product is not supported here)
           static_assert(algebra != 'M', "Error in nda::expr: Matrix algebra not supported");
@@ -378,10 +378,10 @@ namespace nda {
         if constexpr (l_is_scalar) {
           // lhs is a scalar
           static_assert(algebra != 'M', "Error in nda::expr: Matrix algebra not supported");
-          return native_simd<value_t>(static_cast<value_t>(l)) / r.load(args...);
+          return simd::native_simd<value_t>(static_cast<value_t>(l)) / r.load(args...);
         } else if constexpr (r_is_scalar) {
           // rhs is a scalar
-          return l.load(args...) / native_simd<value_t>(static_cast<value_t>(r));
+          return l.load(args...) / simd::native_simd<value_t>(static_cast<value_t>(r));
         } else {
           // both are arrays (matrix division is not supported here)
           static_assert(algebra != 'M', "Error in nda::expr: Matrix algebra not supported");

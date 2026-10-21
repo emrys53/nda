@@ -56,16 +56,16 @@ namespace {
       T operator()(T x, T y) const { return x + y; }
     };
     struct native_f : scalar_f {
-      [[nodiscard]] native_simd<T> load(native_simd<T> x, native_simd<T> y) const { return x + y; }
+      [[nodiscard]] simd::native_simd<T> load(simd::native_simd<T> x, simd::native_simd<T> y) const { return x + y; }
     };
     struct scalar_load_f : scalar_f {
       [[nodiscard]] T load(T x, T y) const { return x + y; }
     };
     struct wrong_args_f : scalar_f {
-      [[nodiscard]] native_simd<T> load(T x, T y) const { return native_simd<T>{x + y}; }
+      [[nodiscard]] simd::native_simd<T> load(T x, T y) const { return simd::native_simd<T>{x + y}; }
     };
     struct wrong_result_f : scalar_f {
-      [[nodiscard]] T load(native_simd<T> x, native_simd<T> y) const { return (x + y).get(0); }
+      [[nodiscard]] T load(simd::native_simd<T> x, simd::native_simd<T> y) const { return (x + y).get(0); }
     };
 
     // Each signature is checked alone, inside arithmetic, and with expression arguments.
@@ -271,7 +271,7 @@ namespace {
 
   template <typename T, typename Layout>
   void check_row_contiguous_views() {
-    constexpr long lanes = native_simd<T>::size;
+    constexpr long lanes = simd::native_simd<T>::size;
     for (long n : {lanes - 1, 2 * lanes + 3}) {
       array<T, 3, Layout> t(n, 3, n), other(n, 3, n), full(n, 3, n);
       fill_random(t, 1, -1000, 1000);
@@ -292,9 +292,9 @@ namespace {
       check_dispatch<true, true>(-(tv - ov) * T{2});
       check_dispatch<true, true>(abs(tv));
       if constexpr (array<T, 3, Layout>::layout_t::is_stride_order_C()) {
-        check_dispatch<true, false>(t(range::all, range::all, 1));
+        check_dispatch<true, false>(t(range::all, range::all, 0));
       } else {
-        check_dispatch<true, false>(t(1, range::all, range::all));
+        check_dispatch<true, false>(t(0, range::all, range::all));
       }
 
       check_assignment(fv, tv * ov + tv, [&](long i, long k) { return t(i, 1, k) * other(i, 1, k) + t(i, 1, k); });
@@ -317,7 +317,7 @@ namespace {
 
   template <typename T>
   void check_row_contiguous_views_mixed_stride_order() {
-    constexpr long n = 2 * native_simd<T>::size + 3;
+    constexpr long n = 2 * simd::native_simd<T>::size + 3;
     array<T, 3> c(n, 3, n);
     array<T, 3, F_layout> f(n, 3, n);
     fill_random(c, 1, -1000, 1000);
@@ -356,7 +356,7 @@ TYPED_TEST(SIMDExpressions, RowContiguousViewsMixedStrideOrder) { check_row_cont
 // for_each_simd falls back to a scalar loop over multi-indices if the arrays cannot be looped over in SIMD-width
 // blocks, without instantiating f_simd (here it would not compile).
 TEST(SIMD, ForEachSimdScalarFallback) {
-  constexpr long n = 2 * native_simd<double>::size + 3;
+  constexpr long n = 2 * simd::native_simd<double>::size + 3;
   auto no_simd     = []<typename... I>(I const &...) { static_assert(always_false<I...>, "f_simd must not be instantiated"); };
   auto check       = [&](auto const &first, auto const &...rest) {
     using idx_t = std::array<long, get_rank<decltype(first)>>;
@@ -380,24 +380,34 @@ TEST(SIMD, ForEachSimdScalarFallback) {
   check(c(range::all, range(0, n, 2))); // strided fastest dimension
   check(c, f);                          // different stride orders
   check(d, l);                          // different value types with the same SIMD width
-  static_assert(native_simd<double>::size == native_simd<std::int64_t>::size);
+  static_assert(simd::native_simd<double>::size == simd::native_simd<std::int64_t>::size);
   check(ld); // no native batch
   static_assert(not Vectorizable<long double>);
   check(map([](double x) { return x * x; })(d)); // functor without a load function
+}
 
-  // the vectorized loop calls f_simd for every full block
+TEST(SIMD, ForEachSimdBatchesAndTail) {
+  constexpr long lanes = simd::native_simd<double>::size;
+  constexpr long n     = 2 * lanes + 3;
+  array<double, 1> d(n);
   long blocks = 0, elements = 0;
   for_each_simd([&](auto const &...) { ++blocks; }, [&](auto const &...) { ++elements; }, d, d + d);
-  EXPECT_EQ(blocks, 2);
-  EXPECT_EQ(elements, 3);
+  EXPECT_EQ(blocks, n / lanes);
+  EXPECT_EQ(elements, n % lanes);
+}
 
-  // assignment relies on the fallback for different value types
+TEST(SIMD, ScalarFallbackResults) {
+  constexpr long n = 2 * simd::native_simd<double>::size + 3;
+  array<double, 1> d(n);
+  array<std::int64_t, 1> l(n);
+  // Assignment between different value types.
   for (long i = 0; i < n; ++i) { l(i) = i - 5; }
   d = l;
   for (long i = 0; i < n; ++i) { EXPECT_EQ(d(i), double(i - 5)); }
 
   // frobenius_norm of arrays without SIMD loads (scalar nda::sum of nda::abs2)
   array<long double, 2> ldm(2, n);
+  array<double, 2> c(n, n);
   ldm = 0.5L;
   c   = 0.5;
   EXPECT_EQ(frobenius_norm(ldm), std::sqrt(0.25L * 2 * n)); // long double result, exact sum of squares

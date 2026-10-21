@@ -125,7 +125,7 @@ namespace nda {
     template <Array A, typename T>
     // NOLINTNEXTLINE (we do not want to forward here)
     auto simd_reduce(A const &a, auto &&op, auto &&reduce, T identity, std::type_identity_t<T> init) {
-      using simd_t = native_simd<T>;
+      using simd_t = simd::native_simd<T>;
       simd_t acc(identity);
       T r = init;
       if constexpr (has_contiguous_layout<A> and supports_flat_loop_v<A>) {
@@ -221,9 +221,9 @@ namespace nda {
   {
     if constexpr (nda::Scalar<Value>) {
 #ifdef NDA_HAVE_XSIMD
-      if constexpr (is_simd_enabled_v<A>) { return detail::simd_reduce(a, std::plus<>{}, [](auto const &b) { return xsimd::reduce_add(b); }, Value{0}); }
+      if constexpr (is_simd_enabled_v<A, Value>) { return detail::simd_reduce(a, std::plus<>{}, [](auto const &b) { return xsimd::reduce_add(b); }, Value{0}); }
 #endif
-      return fold(std::plus<>{}, a);
+      return fold(std::plus<>{}, a, Value{0});
     } else {
       // Array<Value>
       return fold(std::plus<>{}, a, Value::zeros(get_first_element(a).shape()));
@@ -334,7 +334,7 @@ namespace nda {
   {
     if constexpr (nda::Scalar<Value>) {
 #ifdef NDA_HAVE_XSIMD
-      if constexpr (is_simd_enabled_v<A>) { return detail::simd_reduce(a, std::multiplies<>{}, [](auto const &b) { return xsimd::reduce_mul(b); }, Value{1}); }
+      if constexpr (is_simd_enabled_v<A, Value>) { return detail::simd_reduce(a, std::multiplies<>{}, [](auto const &b) { return xsimd::reduce_mul(b); }, Value{1}); }
 #endif
       return fold(std::multiplies<>{}, a, Value{1});
     } else {

@@ -130,5 +130,10 @@ if(SIMDSupport)
     GIT_TAG ${NDA_XSIMD_GIT_TAG}
   )
   FetchContent_MakeAvailable(xsimd)
+  # Treat dependency headers as system headers for consumers.
+  get_target_property(xsimd_include_dirs xsimd INTERFACE_INCLUDE_DIRECTORIES)
+  set_property(TARGET xsimd APPEND PROPERTY
+    INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${xsimd_include_dirs}"
+  )
   message(STATUS " =============== End xsimd Configuration =============== ")
 endif()

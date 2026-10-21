@@ -25,6 +25,7 @@
 #include "./macros.hpp"
 #include "./matrix_functions.hpp"
 #include "./mem/address_space.hpp"
+#include "./mem/alias.hpp"
 #include "./mem/fill.hpp"
 #include "./mem/memcpy.hpp"
 #include "./mem/policies.hpp"
