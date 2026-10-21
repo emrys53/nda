@@ -56,6 +56,10 @@ namespace nda {
   template <typename F, Array... As>
   inline constexpr bool is_expression<expr_call<F, As...>> = true;
 
+  /// Specialization of nda::supports_flat_loop for nda::expr_call types: true if all arguments support it.
+  template <typename F, Array... As>
+  struct supports_flat_loop<expr_call<F, As...>> : std::bool_constant<(supports_flat_loop_v<As> and ...)> {};
+
   /**
    * @addtogroup av_math
    * @{
