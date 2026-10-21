@@ -211,6 +211,61 @@ TEST(SIMD, ScalarTree) {
   static_assert(not is_simd_enabled_v<decltype(log(mapped))>);
 }
 
+// Reductions at sizes around the three loops of nda::detail::simd_reduce (four accumulators, single batches, scalar
+// tail): each boundary from both sides, and all three loops in one run (9w + 3). frobenius_norm also runs on a
+// row-contiguous view.
+TYPED_TEST(SIMDDispatch, Reductions) {
+  using T          = TypeParam;
+  constexpr long w = simd_width<T>();
+  for (long n : {1L, w - 1, w, w + 1, 4 * w - 1, 4 * w, 4 * w + 1, 9 * w + 3}) {
+    array<T, 1> a(n);
+    fill_random(a, static_cast<unsigned>(n), 0, 1000);
+    T total{};
+    for (auto x : a) { total += x; }
+    expect_simd_eq(sum(a), total);
+#ifdef NDA_HAVE_XSIMD
+    // init is folded in once, the identity fills the accumulator lanes
+    auto add = [](auto const &x) { return xsimd::reduce_add(x); };
+    expect_simd_eq(nda::detail::simd_reduce(a, std::plus<>{}, add, T{0}, T{5}), T{5} + total);
+#endif
+
+    // a single distinguished element in each of the four accumulators, in the single-batch loop and in the tail catches
+    // a dropped or repeated lane anywhere in the loop
+    for (long p : {0L, w - 1, w, 2 * w, 3 * w, 4 * w - 1, 4 * w, 8 * w, n - 1}) {
+      if (p >= n) continue;
+      a    = T{1};
+      a(p) = T{3};
+      expect_simd_eq(product(a), T{3});
+#ifdef NDA_HAVE_XSIMD
+      expect_simd_eq(nda::detail::simd_reduce(a, std::multiplies<>{}, [](auto const &x) { return xsimd::reduce_mul(x); }, T{1}, T{2}), T{6});
+#endif
+      if constexpr (not is_complex_v<T>) {
+        expect_simd_eq(max_element(a), T{3});
+        a(p) = T{0};
+        expect_simd_eq(min_element(a), T{0});
+      }
+    }
+
+    // single digits keep the sum of squares exact in float accumulators
+    array<T, 2> m(2, n + 3);
+    fill_random(m, static_cast<unsigned>(n), 0, 10);
+    auto frobenius = [](auto const &x) {
+      double r = 0;
+      for (auto v : x) { r += static_cast<double>(std::norm(v)); }
+      return std::sqrt(r);
+    };
+    auto view = m(range::all, range(1, n + 1));
+    using norm_t = decltype(frobenius_norm(m));
+    expect_simd_eq(frobenius_norm(m), static_cast<norm_t>(frobenius(m)));
+    expect_simd_eq(frobenius_norm(view), static_cast<norm_t>(frobenius(view)));
+#ifdef NDA_HAVE_XSIMD
+    T view_total{};
+    for (auto x : view) { view_total += x; }
+    expect_simd_eq(nda::detail::simd_reduce(view, std::plus<>{}, add, T{0}, T{5}), T{5} + view_total);
+#endif
+  }
+}
+
 TYPED_TEST(SIMDExpressions, FlatLoop) {
   check_flat_loop<TypeParam, C_layout>();
   check_flat_loop<TypeParam, F_layout>();
@@ -267,6 +322,14 @@ namespace {
       // the planes next to the assigned one are untouched
       for (auto x : full(range::all, 0, range::all)) { expect_simd_eq(x, T(-1)); }
       for (auto x : full(range::all, 2, range::all)) { expect_simd_eq(x, T(-1)); }
+
+      T total{};
+      for (auto x : tv) { total += x; }
+      expect_simd_eq(sum(tv), total);
+      if constexpr (not is_complex_v<T>) {
+        expect_simd_eq(max_element(tv), *std::max_element(tv.begin(), tv.end()));
+        expect_simd_eq(min_element(tv), *std::min_element(tv.begin(), tv.end()));
+      }
     }
   }
 
@@ -380,5 +443,13 @@ TEST(SIMD, ScalarFallbackResults) {
   for (long i = 0; i < n; ++i) { l(i) = i - 5; }
   d = l;
   for (long i = 0; i < n; ++i) { EXPECT_EQ(d(i), double(i - 5)); }
+
+  // frobenius_norm of arrays without SIMD loads (scalar nda::sum of nda::abs2)
+  array<long double, 2> ldm(2, n);
+  array<double, 2> c(n, n);
+  ldm = 0.5L;
+  c   = 0.5;
+  EXPECT_EQ(frobenius_norm(ldm), std::sqrt(0.25L * 2 * n)); // long double result, exact sum of squares
+  EXPECT_DOUBLE_EQ(frobenius_norm(c(range::all, range(0, n, 2))), std::sqrt(0.25 * n * ((n + 1) / 2)));
 }
 #endif

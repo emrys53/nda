@@ -17,6 +17,7 @@
 #include "./macros.hpp"
 #include "./map.hpp"
 #include "./mapped_functions.hpp"
+#include "./simd/simd_dispatch.hpp"
 #include "./traits.hpp"
 
 #include <algorithm>
@@ -25,6 +26,7 @@
 #include <concepts>
 #include <cstdlib>
 #include <functional>
+#include <limits>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -113,10 +115,53 @@ namespace nda {
     return fold([](bool r, auto const &x) -> bool { return r and bool(x); }, a, true);
   }
 
+#ifdef NDA_HAVE_XSIMD
+  namespace detail {
+    // Reduce all elements of a SIMD-enabled array with `op` (combines two batches as well as two scalars) and fold the
+    // lanes of the final batch with `reduce`. The flat loop keeps four accumulators to hide the latency of the chain.
+    // `identity` (`op(identity, x) == x`) fills the accumulator lanes, `init` is folded in once.
+    template <Array A, typename T>
+    // NOLINTNEXTLINE (we do not want to forward here)
+    auto simd_reduce(A const &a, auto &&op, auto &&reduce, T identity, std::type_identity_t<T> init) {
+      using simd_t = simd::native_simd<T>;
+      simd_t acc(identity);
+      T r = init;
+      if constexpr (has_contiguous_layout<A> and supports_flat_loop_v<A>) {
+        constexpr long w = simd_t::size;
+        const auto n     = a.size();
+        long k           = 0;
+        simd_t acc1 = acc, acc2 = acc, acc3 = acc;
+        for (; k + 4 * w <= n; k += 4 * w) {
+          acc  = op(acc, a.load(_linear_index_t{k}));
+          acc1 = op(acc1, a.load(_linear_index_t{k + w}));
+          acc2 = op(acc2, a.load(_linear_index_t{k + 2 * w}));
+          acc3 = op(acc3, a.load(_linear_index_t{k + 3 * w}));
+        }
+        acc = op(op(acc, acc1), op(acc2, acc3));
+        for (; k + w <= n; k += w) { acc = op(acc, a.load(_linear_index_t{k})); }
+        for (; k < n; ++k) { r = op(r, a(_linear_index_t{k})); }
+      } else {
+        nda::for_each_simd([&](auto const &x, auto const &...i) { acc = op(acc, x.load(i...)); },
+                           [&](auto const &x, auto const &...i) { r = op(r, x(i...)); }, a);
+      }
+      return op(r, reduce(acc));
+    }
+
+    // nda::detail::simd_reduce with `init = identity`.
+    template <Array A>
+    // NOLINTNEXTLINE (we do not want to forward here)
+    auto simd_reduce(A const &a, auto &&op, auto &&reduce, auto identity) {
+      return simd_reduce(a, op, reduce, identity, identity);
+    }
+  } // namespace detail
+#endif // NDA_HAVE_XSIMD
+
   /**
    * @brief Find the maximum element of an array.
    *
-   * @details It uses nda::fold and `std::max`.
+   * @details It uses nda::fold and `std::max`. With xsimd and a SIMD-enabled array (nda::is_simd_enabled_v), the
+   * elements are compared in native batches (xsimd's `max`, which agrees with `std::max` on x86 but may treat NaN
+   * differently on other architectures) and the lanes are reduced at the end.
    *
    * @tparam A nda::Array type.
    * @param a nda::Array object.
@@ -124,18 +169,26 @@ namespace nda {
    */
   template <Array A>
   auto max_element(A const &a) {
-    return fold(
-       [](auto const &x, auto const &y) {
-         using std::max;
-         return max(x, y);
-       },
-       a, get_first_element(a));
+    auto max_f = [](auto const &x, auto const &y) {
+      using std::max;
+      return max(x, y);
+    };
+#ifdef NDA_HAVE_XSIMD
+    if constexpr (is_simd_enabled_v<A>) {
+      using T                 = get_value_t<A>;
+      constexpr auto identity = std::numeric_limits<T>::has_infinity ? T(-std::numeric_limits<T>::infinity()) : std::numeric_limits<T>::lowest();
+      return detail::simd_reduce(a, max_f, [](auto const &b) { return xsimd::reduce_max(b); }, identity, get_first_element(a));
+    }
+#endif
+    return fold(max_f, a, get_first_element(a));
   }
 
   /**
    * @brief Find the minimum element of an array.
    *
-   * @details It uses nda::fold and `std::min`.
+   * @details It uses nda::fold and `std::min`. With xsimd and a SIMD-enabled array (nda::is_simd_enabled_v), the
+   * elements are compared in native batches (xsimd's `min`, which agrees with `std::min` on x86 but may treat NaN
+   * differently on other architectures) and the lanes are reduced at the end.
    *
    * @tparam A nda::Array type.
    * @param a nda::Array object.
@@ -143,18 +196,32 @@ namespace nda {
    */
   template <Array A>
   auto min_element(A const &a) {
-    return fold(
-       [](auto const &x, auto const &y) {
-         using std::min;
-         return min(x, y);
-       },
-       a, get_first_element(a));
+    auto min_f = [](auto const &x, auto const &y) {
+      using std::min;
+      return min(x, y);
+    };
+#ifdef NDA_HAVE_XSIMD
+    if constexpr (is_simd_enabled_v<A>) {
+      using T                 = get_value_t<A>;
+      constexpr auto identity = std::numeric_limits<T>::has_infinity ? std::numeric_limits<T>::infinity() : std::numeric_limits<T>::max();
+      return detail::simd_reduce(a, min_f, [](auto const &b) { return xsimd::reduce_min(b); }, identity, get_first_element(a));
+    }
+#endif
+    return fold(min_f, a, get_first_element(a));
   }
 
   /**
    * @brief Sum all the elements of an nda::Array object.
    *
+   * @details Accumulates in the type `Value`, which defaults to the value type of the array: `sum<A, long>(a)` of an
+   * `int` array accumulates in `long`. With xsimd and an array that is SIMD-enabled for `Value`
+   * (nda::is_simd_enabled_v<A, Value>), the elements are added in native batches of `Value` with four independent
+   * accumulators and the lanes are reduced at the end, so the order of the additions differs from the scalar fold
+   * (and so can the rounding of floating-point sums). Note that 8- and 16-bit integer arrays then accumulate in lanes
+   * of their own type, whereas the scalar fold promotes to `int`; pass a wider `Value` to avoid wrapping.
+   *
    * @tparam A nda::Array type.
+   * @tparam Value nda::Scalar type of the accumulator and of the result, or an nda::Array type for arrays of arrays.
    * @param a nda::Array object.
    * @return Sum of all elements.
    */
@@ -163,8 +230,12 @@ namespace nda {
     requires(nda::Scalar<Value> or nda::Array<Value>)
   {
     if constexpr (nda::Scalar<Value>) {
-      return fold(std::plus<>{}, a);
-    } else { // Array<Value>
+#ifdef NDA_HAVE_XSIMD
+      if constexpr (is_simd_enabled_v<A, Value>) { return detail::simd_reduce(a, std::plus<>{}, [](auto const &b) { return xsimd::reduce_add(b); }, Value{0}); }
+#endif
+      return fold(std::plus<>{}, a, Value{0});
+    } else {
+      // Array<Value>
       return fold(std::plus<>{}, a, Value::zeros(get_first_element(a).shape()));
     }
   }
@@ -263,7 +334,13 @@ namespace nda {
   /**
    * @brief Multiply all the elements of an nda::Array object.
    *
+   * @details Accumulates in the type `Value`, which defaults to the value type of the array. With xsimd and an array
+   * that is SIMD-enabled for `Value` (nda::is_simd_enabled_v<A, Value>), the elements are multiplied in native
+   * batches of `Value` with four independent accumulators and the lanes are reduced at the end, so the order of the
+   * multiplications differs from the scalar fold. The remarks on narrow integer types in nda::sum apply as well.
+   *
    * @tparam A nda::Array type.
+   * @tparam Value nda::Scalar type of the accumulator and of the result, or an nda::Array type for arrays of arrays.
    * @param a nda::Array object.
    * @return Product of all elements.
    */
@@ -272,8 +349,12 @@ namespace nda {
     requires(nda::Scalar<Value> or nda::Array<Value>)
   {
     if constexpr (nda::Scalar<Value>) {
-      return fold(std::multiplies<>{}, a, get_value_t<A>{1});
-    } else { // Array<Value>
+#ifdef NDA_HAVE_XSIMD
+      if constexpr (is_simd_enabled_v<A, Value>) { return detail::simd_reduce(a, std::multiplies<>{}, [](auto const &b) { return xsimd::reduce_mul(b); }, Value{1}); }
+#endif
+      return fold(std::multiplies<>{}, a, Value{1});
+    } else {
+      // Array<Value>
       return fold(std::multiplies<>{}, a, Value::ones(get_first_element(a).shape()));
     }
   }
