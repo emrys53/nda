@@ -13,6 +13,7 @@
 #include "./concepts.hpp"
 #include "./layout/range.hpp"
 #include "./macros.hpp"
+#include "./simd/simd_dispatch.hpp"
 #include "./traits.hpp"
 
 #include <cstddef>
@@ -59,6 +60,18 @@ namespace nda {
   /// Specialization of nda::is_elementwise_v for nda::expr_call types: true if all arguments are.
   template <typename F, Array... As>
   inline constexpr bool is_elementwise_v<expr_call<F, As...>> = (is_elementwise_v<As> and ...);
+
+  /// Specialization of nda::has_simd_load_v for nda::expr_call types: the value type must be `T`, the arguments must be
+  /// loadable as their own value types with the lane count of `T` and the callable must map their batches to a batch of `T`.
+  template <typename F, Array... As, typename T>
+  inline constexpr bool has_simd_load_v<expr_call<F, As...>, T> = [] {
+    // check the widths before probing F::load, which instantiates its signature
+    if constexpr (std::is_same_v<get_value_t<expr_call<F, As...>>, T> and simd::SimdPreservesLaneWidth<T, get_value_t<As>...>) {
+      return simd::LoadWithNativeSimdTo<F, T, get_value_t<As>...> and (has_simd_load_v<As> and ...);
+    } else {
+      return false;
+    }
+  }();
 
   /**
    * @addtogroup av_math

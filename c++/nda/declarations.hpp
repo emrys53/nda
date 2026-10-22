@@ -343,6 +343,16 @@ namespace nda {
   template <typename ValueType, int Rank, typename Layout, char Algebra, typename AccessorPolicy, typename OwningPolicy>
   inline constexpr bool is_elementwise_v<basic_array_view<ValueType, Rank, Layout, Algebra, AccessorPolicy, OwningPolicy>> = true;
 
+  /// Specialization of nda::has_simd_load_v for nda::basic_array types: the value type must be `T` and have a native batch.
+  template <typename ValueType, int Rank, typename Layout, char Algebra, typename ContainerPolicy, typename T>
+  inline constexpr bool has_simd_load_v<basic_array<ValueType, Rank, Layout, Algebra, ContainerPolicy>, T> =
+     std::is_same_v<get_value_t<basic_array<ValueType, Rank, Layout, Algebra, ContainerPolicy>>, T> and simd::Vectorizable<T>;
+
+  /// Specialization of nda::has_simd_load_v for nda::basic_array_view types: the value type must be `T` and have a native batch.
+  template <typename ValueType, int Rank, typename Layout, char Algebra, typename AccessorPolicy, typename OwningPolicy, typename T>
+  inline constexpr bool has_simd_load_v<basic_array_view<ValueType, Rank, Layout, Algebra, AccessorPolicy, OwningPolicy>, T> =
+     std::is_same_v<get_value_t<basic_array_view<ValueType, Rank, Layout, Algebra, AccessorPolicy, OwningPolicy>>, T> and simd::Vectorizable<T>;
+
   /**
    * @brief Get the type of the nda::basic_array_view that would be obtained by constructing a view from a given type.
    * @tparam T Type to construct a view from.
@@ -405,6 +415,10 @@ namespace nda {
   template <char OP, Array A>
   inline constexpr bool is_elementwise_v<expr_unary<OP, A>> = is_elementwise_v<A>;
 
+  /// Specialization of nda::has_simd_load_v for nda::expr_unary types: the value type must be `T` and the operand loadable as `T`.
+  template <char OP, Array A, typename T>
+  inline constexpr bool has_simd_load_v<expr_unary<OP, A>, T> = std::is_same_v<get_value_t<expr_unary<OP, A>>, T> and has_simd_load_v<A, T>;
+
   /// Specialization of nda::get_algebra for nda::expr types.
   template <char OP, typename L, typename R>
   inline constexpr char get_algebra<expr<OP, L, R>> = expr<OP, L, R>::algebra;
@@ -416,6 +430,13 @@ namespace nda {
   /// Specialization of nda::is_elementwise_v for nda::expr types.
   template <char OP, typename L, typename R>
   inline constexpr bool is_elementwise_v<expr<OP, L, R>> = expr<OP, L, R>::is_elementwise;
+
+  /// Specialization of nda::has_simd_load_v for nda::expr types: the value type must be `T`, array operands must be
+  /// loadable as `T` and scalar operands convertible to it.
+  template <char OP, typename L, typename R, typename T>
+  inline constexpr bool has_simd_load_v<expr<OP, L, R>, T> = std::is_same_v<get_value_t<expr<OP, L, R>>, T>
+     and (is_scalar_v<L> ? std::is_convertible_v<std::remove_cvref_t<L>, T> : has_simd_load_v<L, T>)
+     and (is_scalar_v<R> ? std::is_convertible_v<std::remove_cvref_t<R>, T> : has_simd_load_v<R, T>);
 
   /// Specialization of nda::is_expression for nda::expr_unary types.
   template <char OP, Array A>

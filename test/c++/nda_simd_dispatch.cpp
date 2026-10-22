@@ -17,7 +17,7 @@ namespace {
 
   template <bool Loadable, bool Enabled, typename E>
   void check_dispatch(E const &) {
-    static_assert(simd::has_load_function<E>() == Loadable);
+    static_assert(has_simd_load_v<E> == Loadable);
     static_assert(is_simd_enabled_v<E> == Enabled);
   }
 
@@ -42,7 +42,7 @@ namespace {
     // Mixed array value types cannot be loaded as the result's native batch.
     array<std::int16_t, 2, Layout1> narrow(32, 32);
     check_dispatch<false, false>(a + narrow);
-    static_assert(not simd::has_load_function<decltype(a), std::int16_t>());
+    static_assert(not has_simd_load_v<decltype(a), std::int16_t>);
 
     auto slice = a(range(0, 16), 0);
     check_dispatch<true, false>(slice);
@@ -162,9 +162,9 @@ TYPED_TEST(SIMDDispatch, Traits) {
 }
 
 TEST(SIMD, UnsupportedTypes) {
-  static_assert(not simd::has_load_function<array<std::vector<int>, 2>>());
+  static_assert(not has_simd_load_v<array<std::vector<int>, 2>>);
   static_assert(not is_simd_enabled_v<array<std::vector<int>, 2>>);
-  static_assert(not simd::has_load_function<array<float *, 3>>());
+  static_assert(not has_simd_load_v<array<float *, 3>>);
   static_assert(not is_simd_enabled_v<array<float *, 3>>);
   static_assert(not is_simd_enabled_v<float>);
 }
