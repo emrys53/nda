@@ -29,11 +29,11 @@ namespace nda::simd {
    * @brief CRTP base that gives a scalar functor a SIMD `load` by applying the scalar call lane by lane.
    *
    * @details A functor `F` deriving from `mock_simd<F, T>` and defining `T operator()(T...) const` gains
-   * `load(native_simd<U>...)`, which stores the argument batches to arrays, applies the scalar call to every lane (with
-   * the usual conversions of a scalar call) and loads the results back as a `native_simd<T>`. A functor that inherits
-   * from `mock_simd` therefore has the `load` that nda::map requires for SIMD evaluation (nda::simd::LoadWithNativeSimdTo),
-   * so expressions built with it are SIMD-enabled without a hand-written batch implementation. It is meant for tests
-   * and prototyping, since it is not faster than the scalar path.
+   * `load(native_simd<U>...)`, which stores the argument batches to arrays, applies the scalar call to every lane and
+   * loads the results back as a `native_simd<T>`. A functor that inherits from `mock_simd` therefore has the `load` that
+   * nda::map requires for SIMD evaluation (nda::simd::LoadWithNativeSimdTo), so expressions built with it are
+   * SIMD-enabled without a hand-written batch implementation. It is meant for tests and prototyping, since it is not
+   * faster than the scalar path.
    *
    * @code{.cpp}
    * struct plus_one : nda::simd::mock_simd<plus_one, double> {
