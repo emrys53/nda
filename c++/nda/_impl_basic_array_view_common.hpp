@@ -548,7 +548,7 @@ private:
 // Implementation of the assignment from an n-dimensional array type. Memory arrays with the same stride order are
 // copied with linear indices or memcpy2D; everything else is evaluated element by element in the stride order of the
 // destination or, with xsimd, in SIMD blocks (nda::for_each_simd) when the expression qualifies and does not overlap
-// the destination other than exactly in place (nda::mem::may_alias).
+// the destination other than exactly in place (nda::mem::detect_aliasing).
 template <typename RHS>
 void assign_from_ndarray(RHS const &rhs) {
 #ifdef NDA_ENFORCE_BOUNDCHECK
@@ -614,7 +614,7 @@ void assign_from_ndarray(RHS const &rhs) {
     NDA_RUNTIME_ERROR << "Error in assign_from_ndarray: Fallback to elementwise assignment not implemented for arrays/views on the GPU";
   }
 #ifdef NDA_HAVE_XSIMD
-  if (mem::may_alias(*this, rhs)) {
+  if (mem::detect_aliasing(*this, rhs) == mem::aliasing::may_overlap) {
     // SIMD blocks read before they write; evaluate other overlaps element by element.
     nda::for_each_static<0, get_layout_info<self_t>.stride_order>(shape(), [this, &rhs](auto const &...i) { (*this)(i...) = rhs(i...); });
   } else {

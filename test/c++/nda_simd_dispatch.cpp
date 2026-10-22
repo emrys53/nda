@@ -418,12 +418,12 @@ TEST(SIMD, OverlappingAssignment) {
   buffer = 0.0;
   array_contiguous_view<double, 1> src{{n}, buffer.data()}, dst{{n}, buffer.data() + 1}; // dst is src shifted by one
   static_assert(is_simd_enabled_v<decltype(src + 1.0)>);
-  EXPECT_TRUE(mem::may_alias(dst, src + 1.0));
+  EXPECT_EQ(mem::detect_aliasing(dst, src + 1.0), mem::aliasing::may_overlap);
   dst = src + 1.0; // every element sees the element before it, which was just written
   for (long i = 0; i <= n; ++i) { EXPECT_EQ(buffer(i), double(i)); }
 
   auto whole = buffer();
-  EXPECT_FALSE(mem::may_alias(whole, whole * 2.0));
+  EXPECT_EQ(mem::detect_aliasing(whole, whole * 2.0), mem::aliasing::in_place);
   whole = whole * 2.0;
   for (long i = 0; i <= n; ++i) { EXPECT_EQ(buffer(i), 2.0 * double(i)); }
 }
