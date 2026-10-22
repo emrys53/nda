@@ -16,7 +16,6 @@
 
 #include <cstddef>
 #include <cstdint>
-
 #include <tuple>
 
 namespace nda {
@@ -34,9 +33,7 @@ namespace nda::mem {
 
   /// Byte-address interval `[begin, end)` of a block of memory.
   struct memory_bounds {
-    /// Address of the first byte.
     std::uintptr_t begin;
-    /// Address one past the last byte.
     std::uintptr_t end;
   };
 
@@ -45,9 +42,10 @@ namespace nda::mem {
    *
    * @details Contiguous layouts need only the size, constant-stride layouts (nda::has_layout_strided_1d) only the
    * displacement of the last element, and other layouts sum the negative and the positive displacement of each axis
-   * separately. No element is dereferenced and no overflow check is performed.
+   * separately. No element is dereferenced and no overflow check is performed. An empty array/view gives the empty
+   * interval `[p, p)` at its data pointer `p`.
    *
-   * @pre The view is nonempty, its displacements are representable, and its compile-time layout guarantees hold.
+   * @pre The displacements of the elements are representable and the compile-time layout guarantees hold.
    * @tparam A nda::MemoryArray type.
    * @param a Array/view.
    * @return nda::mem::memory_bounds of the elements.
@@ -59,6 +57,7 @@ namespace nda::mem {
     if constexpr (has_contiguous_layout<A>) {
       return {.begin = p, .end = p + static_cast<std::uintptr_t>(a.size()) * itemsize};
     } else {
+      if (a.size() == 0) return {.begin = p, .end = p};
       std::ptrdiff_t lo = 0, hi = 0;
       if constexpr (has_layout_strided_1d<A>) {
         // A constant linear stride needs only its final displacement.
@@ -77,79 +76,84 @@ namespace nda::mem {
     }
   }
 
+  /// How the sources of an assignment share memory with its destination.
+  enum class aliasing {
+    /// No source shares memory with the destination.
+    disjoint,
+    /// Memory is shared only with exact in-place operands (same element type, data pointer, shape and strides as the
+    /// destination), e.g. `a` in `a = a + 1`: every element is read where it is written (if no stride is zero).
+    in_place,
+    /// A source may share memory with the destination in any other way.
+    may_overlap
+  };
+
+  /// Aliasing of two sources together: `may_overlap` if either may overlap, otherwise `in_place` if either is an
+  /// in-place operand, otherwise `disjoint`.
+  FORCEINLINE constexpr aliasing operator|(aliasing a, aliasing b) {
+    if (a == aliasing::may_overlap or b == aliasing::may_overlap) return aliasing::may_overlap;
+    if (a == aliasing::in_place or b == aliasing::in_place) return aliasing::in_place;
+    return aliasing::disjoint;
+  }
+
   namespace detail {
 
-    // Returns true for possible overlap other than exact in-place mappings.
-    // The exact-mapping exemption assumes distinct destination elements.
+    // Classifies the array leaves of a source relative to the destination (see nda::mem::detect_aliasing).
     template <MemoryArray D>
     struct alias_checker {
-      D const &dst;
+      D const &dst; //NOLINT
       mem::memory_bounds bounds;
 
       template <typename T>
-      bool operator()(T const &) const { return true; }
+      FORCEINLINE aliasing operator()(T const &) const { return aliasing::may_overlap; }
 
       template <Scalar S>
-      bool operator()(S const &) const { return false; }
+      FORCEINLINE aliasing operator()(S const &) const { return aliasing::disjoint; }
 
       template <MemoryArray A>
-      bool operator()(A const &e) const {
-        // Exact in-place operands introduce no dependencies between distinct destination elements.
+      FORCEINLINE aliasing operator()(A const &e) const {
+        if (e.size() == 0) return aliasing::disjoint;
         if constexpr (std::is_same_v<get_value_t<A>, get_value_t<D>> and get_rank<A> == get_rank<D>) {
           if (static_cast<void const *>(e.data()) == static_cast<void const *>(dst.data())
               and e.shape() == dst.shape() and e.indexmap().strides() == dst.indexmap().strides())
-            return false;
+            return aliasing::in_place;
         }
         auto other = mem::get_memory_bounds(e);
-        return bounds.begin < other.end and other.begin < bounds.end;
+        return bounds.begin < other.end and other.begin < bounds.end ? aliasing::may_overlap : aliasing::disjoint;
       }
 
       template <char OP, Array A>
-      bool operator()(expr_unary<OP, A> const &e) const { return (*this)(e.a); }
+      FORCEINLINE aliasing operator()(expr_unary<OP, A> const &e) const { return (*this)(e.a); }
 
       template <char OP, ArrayOrScalar L, ArrayOrScalar R>
-      bool operator()(expr<OP, L, R> const &e) const { return (*this)(e.l) or (*this)(e.r); }
+      FORCEINLINE aliasing operator()(expr<OP, L, R> const &e) const { return (*this)(e.l) | (*this)(e.r); }
 
       template <typename F, Array... A>
-      bool operator()(expr_call<F, A...> const &e) const {
-        return std::apply([&](auto const &...a) { return ((*this)(a) or ...); }, e.a);
+      FORCEINLINE aliasing operator()(expr_call<F, A...> const &e) const {
+        return std::apply([&](auto const &...a) { return (aliasing::disjoint | ... | (*this)(a)); }, e.a);
       }
     };
 
   } // namespace detail
 
   /**
-   * @brief Check whether writing the elements of a destination array/view may change what the given source arrays
-   * or expressions read, except for exact in-place mappings.
+   * @brief Detect how the sources of an assignment share memory with its destination.
    *
-   * @details The byte-address interval of the destination (nda::mem::get_memory_bounds) is compared with the one of
-   * every memory array found in the sources: the array leaves of nda::expr_unary, nda::expr and nda::expr_call
-   * (scalar operands never alias; other nda::Array types are conservatively reported as aliasing). A source with the
-   * same element type, data pointer, shape and strides as the destination is exempt: it reads every element exactly
-   * where it is written, so an evaluation that reads a block of elements before writing it is still correct, e.g.
-   * `a = a + 1`. The exemption assumes that the destination elements are distinct (no two indices map to the same
-   * address); a view with a zero stride breaks it.
-   *
-   * The result is conservative: `true` includes interleaved views that share no element (the even and the odd
-   * elements of one buffer); `false` means that every source is either disjoint or an exact in-place operand, not
-   * that the operands do not overlap, so it must not be used to justify `restrict`. Empty destinations and empty
-   * sources never alias.
+   * @details Compares the byte-address interval of the destination (nda::mem::get_memory_bounds) with the intervals of
+   * the memory arrays in the sources. Conservative: `may_overlap` also covers interleaved views that share no element
+   * and sources that are neither memory arrays, expressions nor scalars.
    *
    * @tparam A nda::MemoryArray type of the destination.
-   * @tparam B nda::Array types of the sources (arrays, views or expressions).
+   * @tparam B nda::Array types of the sources.
    * @param dst Destination array/view.
    * @param src Source arrays, views or expressions.
-   * @return True if a source may overlap the destination other than as an exact in-place mapping.
+   * @return nda::mem::aliasing of the sources.
    */
   template <MemoryArray A, Array... B>
-  [[nodiscard]] FORCEINLINE bool may_alias(A const &dst, B const &...src) {
-    if constexpr (sizeof...(B) == 0) return false;
-    else {
-      if (dst.size() == 0) return false;
-      // Calculate destination bounds once for all source operands.
-      auto const checker = detail::alias_checker<A>{dst, get_memory_bounds(dst)};
-      return ((src.size() != 0 and checker(src)) or ...);
-    }
+  [[nodiscard]] FORCEINLINE aliasing detect_aliasing(A const &dst, B const &...src) {
+    if (dst.size() == 0) return aliasing::disjoint;
+    // Calculate destination bounds once for all source operands.
+    [[maybe_unused]] auto const checker = detail::alias_checker<A>{dst, get_memory_bounds(dst)};
+    return (aliasing::disjoint | ... | checker(src));
   }
 
 } // namespace nda::mem

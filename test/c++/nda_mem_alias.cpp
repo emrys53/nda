@@ -10,7 +10,8 @@
 #include <complex>
 #include <cstdint>
 
-using nda::mem::may_alias;
+using nda::mem::aliasing;
+using nda::mem::detect_aliasing;
 
 TEST(NDA, MemoryBounds) {
   auto check = [](auto const &a, auto *begin, auto *end) {
@@ -32,6 +33,10 @@ TEST(NDA, MemoryBounds) {
   check(forward, storage.data(), storage.data() + 41);
   check(backward, storage.data(), storage.data() + 41);
   check(mixed, storage.data() + 4, storage.data() + 37);
+
+  // empty views give an empty interval at their data pointer
+  check(linear_view{linear_view::layout_t{{0, 7}, {14, 2}}, storage.data() + 8}, storage.data() + 8, storage.data() + 8);
+  check(nda::array_view<double, 2>{{{3, 0}, {10, -2}}, storage.data() + 16}, storage.data() + 16, storage.data() + 16);
 }
 
 TEST(NDA, MemoryAliasViews) {
@@ -40,22 +45,22 @@ TEST(NDA, MemoryAliasViews) {
   view_t head{{8}, storage.data()}, shifted{{8}, storage.data() + 1}, adjacent{{8}, storage.data() + 8};
   view_t shorter{{7}, storage.data()}, reverse{view_t::layout_t{{8}, {-1}}, storage.data() + 7};
   view_t even{view_t::layout_t{{8}, {2}}, storage.data()}, odd{view_t::layout_t{{8}, {2}}, storage.data() + 1};
-  EXPECT_FALSE(may_alias(head, head)); // Exact mapping is exempt; different shapes or strides are not.
-  EXPECT_TRUE(may_alias(head, shorter));
-  EXPECT_TRUE(may_alias(head, even));
-  EXPECT_TRUE(may_alias(head, reverse));
-  EXPECT_FALSE(may_alias(head, adjacent));
-  EXPECT_TRUE(may_alias(even, odd)); // Conservative false positive for interleaved elements.
-  EXPECT_TRUE(may_alias(head, head + shifted)); // Exact operands must not hide shifted overlaps.
+  EXPECT_EQ(detect_aliasing(head, head), aliasing::in_place); // Only the exact mapping is in place, not other shapes or strides.
+  EXPECT_EQ(detect_aliasing(head, shorter), aliasing::may_overlap);
+  EXPECT_EQ(detect_aliasing(head, even), aliasing::may_overlap);
+  EXPECT_EQ(detect_aliasing(head, reverse), aliasing::may_overlap);
+  EXPECT_EQ(detect_aliasing(head, adjacent), aliasing::disjoint);
+  EXPECT_EQ(detect_aliasing(even, odd), aliasing::may_overlap); // Conservative for interleaved elements.
+  EXPECT_EQ(detect_aliasing(head, head + shifted), aliasing::may_overlap); // Exact operands must not hide shifted overlaps.
 }
 
 TEST(NDA, MemoryAliasExpressions) {
   nda::array<double, 1> a(8), b(8), dst(8), empty(0);
   int calls = 0;
   auto mapped = nda::map([&](double x, double y) { ++calls; return x + y; })(a, b);
-  EXPECT_FALSE(may_alias(dst, -a + 2.0 * mapped, b));
-  EXPECT_FALSE(may_alias(a, mapped));
-  EXPECT_FALSE(may_alias(empty, mapped));
-  EXPECT_FALSE(may_alias(dst, empty + 1.0));
-  EXPECT_FALSE(may_alias(dst));
+  EXPECT_EQ(detect_aliasing(dst, -a + 2.0 * mapped, b), aliasing::disjoint);
+  EXPECT_EQ(detect_aliasing(a, mapped), aliasing::in_place); // a is an exact operand, b is disjoint
+  EXPECT_EQ(detect_aliasing(empty, mapped), aliasing::disjoint);
+  EXPECT_EQ(detect_aliasing(dst, empty + 1.0), aliasing::disjoint);
+  EXPECT_EQ(detect_aliasing(dst), aliasing::disjoint);
 }
