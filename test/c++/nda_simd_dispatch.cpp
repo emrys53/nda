@@ -15,7 +15,6 @@ using namespace nda;
 
 namespace {
 
-#ifdef NDA_HAVE_XSIMD
   template <bool Loadable, bool Enabled, typename E>
   void check_dispatch(E const &) {
     static_assert(simd::has_load_function<E>() == Loadable);
@@ -88,7 +87,6 @@ namespace {
     check_dispatch<true, same_layout>(map(mock_f{})(a, b) * T{2} - T{1});
     check_dispatch<true, false>(map(native_f{})(a, b)(range(0, 16), 0));
   }
-#endif
 
   // Assigns an expression to a rank-2 result and compares every element with expected(i, j).
   template <typename R>
@@ -156,14 +154,12 @@ class SIMDExpressions : public ::testing::Test {};
 using signed_simd_types = ::testing::Types<std::int32_t, std::int64_t, float, double, std::complex<float>, std::complex<double>>;
 TYPED_TEST_SUITE(SIMDExpressions, signed_simd_types);
 
-#ifdef NDA_HAVE_XSIMD
 TYPED_TEST(SIMDDispatch, Traits) {
   check_traits<TypeParam, C_layout, C_layout>();
   check_traits<TypeParam, C_layout, F_layout>();
   check_traits<TypeParam, F_layout, C_layout>();
   check_traits<TypeParam, F_layout, F_layout>();
 }
-#endif
 
 TEST(SIMD, UnsupportedTypes) {
   static_assert(not simd::has_load_function<array<std::vector<int>, 2>>());
@@ -171,21 +167,15 @@ TEST(SIMD, UnsupportedTypes) {
   static_assert(not simd::has_load_function<array<float *, 3>>());
   static_assert(not is_simd_enabled_v<array<float *, 3>>);
   static_assert(not is_simd_enabled_v<float>);
-#ifndef NDA_HAVE_XSIMD
-  static_assert(not is_simd_enabled_v<array<double, 1>>);
-  static_assert(not is_simd_enabled_v<decltype(abs(std::declval<array<std::complex<double>, 1> &>()))>);
-#endif
 }
 
 TEST(SIMD, ScalarBroadcast) {
   array<float, 2> a(5, 7);
   a = 1.5f;
-#ifdef NDA_HAVE_XSIMD
   static_assert(is_simd_enabled_v<decltype(a * 2)>);
   static_assert(is_simd_enabled_v<decltype(2 + a)>);
   static_assert(is_simd_enabled_v<decltype(a - 1)>);
   static_assert(not is_simd_enabled_v<decltype(a + 1.0)>);
-#endif
   array<float, 2> result = a * 2 - 1;
   for (auto x : result) { EXPECT_EQ(x, 2.0f); }
   matrix<float> m(a), out(5, 7);
@@ -199,11 +189,7 @@ TEST(SIMD, ScalarTree) {
   auto negated = -scalar;
   auto scaled = 5.0f * (negated + 5.0f);
   auto mapped = map([](auto const &x, auto const &y) { return x - y; })(scaled + scaled, scalar);
-#ifdef NDA_HAVE_XSIMD
   static_assert(is_simd_enabled_v<decltype(native)>);
-#else
-  static_assert(not is_simd_enabled_v<decltype(native)>);
-#endif
   static_assert(not is_simd_enabled_v<decltype(scalar)>);
   static_assert(not is_simd_enabled_v<decltype(negated)>);
   static_assert(not is_simd_enabled_v<decltype(scaled)>);
