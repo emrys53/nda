@@ -17,7 +17,7 @@
 namespace nda::simd {
 
   /**
-   * @addtogroup utils_type_traits
+   * @addtogroup simd
    * @{
    */
 
