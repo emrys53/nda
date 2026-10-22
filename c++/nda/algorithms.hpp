@@ -122,7 +122,7 @@ namespace nda {
     // `identity` (`op(identity, x) == x`) fills the accumulator lanes, `init` is folded in once.
     template <Array A, typename T>
     // NOLINTNEXTLINE (we do not want to forward here)
-    auto simd_reduce(A const &a, auto &&op, auto &&reduce, T identity, std::type_identity_t<T> init) {
+    [[nodiscard]] auto simd_reduce(A const &a, auto &&op, auto &&reduce, T identity, std::type_identity_t<T> init) {
       using simd_t = simd::native_simd<T>;
       simd_t acc(identity);
       T r = init;
@@ -150,7 +150,7 @@ namespace nda {
     // nda::detail::simd_reduce with `init = identity`.
     template <Array A>
     // NOLINTNEXTLINE (we do not want to forward here)
-    auto simd_reduce(A const &a, auto &&op, auto &&reduce, auto identity) {
+    [[nodiscard]] auto simd_reduce(A const &a, auto &&op, auto &&reduce, auto identity) {
       return simd_reduce(a, op, reduce, identity, identity);
     }
   } // namespace detail
