@@ -19,7 +19,7 @@
 namespace nda {
 
   /**
-   * @addtogroup utils_concepts
+   * @addtogroup simd
    * @{
    */
 
