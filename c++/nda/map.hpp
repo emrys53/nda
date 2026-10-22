@@ -114,14 +114,14 @@ namespace nda {
 
     // Implementation of the subscript operator.
     template <size_t... Is, typename Arg>
-    FORCEINLINE auto _call_bra(std::index_sequence<Is...>, Arg const &arg) const {
+    [[nodiscard]] FORCEINLINE auto _call_bra(std::index_sequence<Is...>, Arg const &arg) const {
       return f(std::get<Is>(a)[arg]...);
     }
 
 #ifdef NDA_HAVE_XSIMD
-    // Implementation of load operator.
+    // Implementation of the SIMD load.
     template <size_t... Is, typename... Args>
-    FORCEINLINE auto _call_load(std::index_sequence<Is...>, Args const &...args) const {
+    [[nodiscard]] FORCEINLINE auto _call_load(std::index_sequence<Is...>, Args const &...args) const {
       return f.load(std::get<Is>(a).load(args...)...);
     }
 #endif // NDA_HAVE_XSIMD
@@ -158,7 +158,7 @@ namespace nda {
      * @return nda::simd::native_simd batch returned by `f.load`.
      */
     template <typename... Args>
-    FORCEINLINE auto load(Args const &...args) const {
+    [[nodiscard]] FORCEINLINE auto load(Args const &...args) const {
       return _call_load(std::make_index_sequence<sizeof...(As)>{}, args...);
     }
 #endif // NDA_HAVE_XSIMD

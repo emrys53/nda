@@ -78,7 +78,7 @@ namespace nda {
      * @return Negated nda::simd::native_simd batch of the operand.
      */
     template <typename... Args>
-    FORCEINLINE auto load(Args &&...args) const {
+    [[nodiscard]] FORCEINLINE auto load(Args &&...args) const {
       return -(a.load(std::forward<Args>(args)...));
     }
 #endif // NDA_HAVE_XSIMD
@@ -292,7 +292,7 @@ namespace nda {
     private:
     // Apply the binary operation to two batches.
     template <simd::NativeSimd B>
-    static FORCEINLINE B apply(B const &a, B const &b) {
+    [[nodiscard]] static FORCEINLINE B apply(B const &a, B const &b) {
       if constexpr (OP == '+') return a + b;
       if constexpr (OP == '-') return a - b;
       if constexpr (OP == '*') return a * b;
@@ -304,7 +304,7 @@ namespace nda {
     // complex batch acts on the components, like `std::complex<T> OP T` (a real scalar divided by a complex batch is
     // a complex division, as `T / std::complex<T>` is).
     template <bool scalar_on_left, typename S, simd::NativeSimd B>
-    static FORCEINLINE B apply_scalar(S const &s, B const &z) {
+    [[nodiscard]] static FORCEINLINE B apply_scalar(S const &s, B const &z) {
       using value_t = typename B::value_type;
       if constexpr (is_complex_v<value_t> and not is_complex_v<S> and not (scalar_on_left and OP == '/')) {
         using real_t  = remove_complex_t<value_t>;
@@ -327,7 +327,7 @@ namespace nda {
 
     // Batch of matrix +/- scalar starting at the multi-index (i, j): the batch of the matrix, with the scalar applied
     // to the lane that holds a diagonal element if the block contains one.
-    FORCEINLINE auto load_diagonal(long i, long j) const
+    [[nodiscard]] FORCEINLINE auto load_diagonal(long i, long j) const
       requires(acts_on_diagonal)
     {
       auto const diagonal = [&]<Array M>(M const &m, auto const &s) {
@@ -363,7 +363,7 @@ namespace nda {
      * @return nda::simd::native_simd batch of the expression's value type.
      */
     template <typename... Args>
-    FORCEINLINE auto load(Args const &...args) const {
+    [[nodiscard]] FORCEINLINE auto load(Args const &...args) const {
       if constexpr (acts_on_diagonal) {
         static_assert(not (std::is_same_v<Args, _linear_index_t> or ...),
                       "Error in nda::expr: matrix +/- scalar acts on the diagonal and cannot be evaluated with a linear index");
