@@ -98,7 +98,7 @@ namespace {
   }
 
   template <typename T, typename Layout>
-  void check_flat_loop() {
+  void check_elementwise() {
     using matrix_t   = matrix<T, Layout>;
     constexpr long n = 2 * simd::native_simd<T>::size + 3;
     matrix_t m(n, n), other(n, n), result(n, n);
@@ -246,9 +246,9 @@ TYPED_TEST(SIMDDispatch, Reductions) {
   }
 }
 
-TYPED_TEST(SIMDExpressions, FlatLoop) {
-  check_flat_loop<TypeParam, C_layout>();
-  check_flat_loop<TypeParam, F_layout>();
+TYPED_TEST(SIMDExpressions, Elementwise) {
+  check_elementwise<TypeParam, C_layout>();
+  check_elementwise<TypeParam, F_layout>();
 }
 
 // The element-wise assignment traverses in the stride order of the destination (visible with a stateful functor).
