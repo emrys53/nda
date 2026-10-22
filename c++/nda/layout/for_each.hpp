@@ -179,12 +179,24 @@ namespace nda {
   }
 
   /**
+   * @brief Constexpr variable that is true if nda::for_each_simd loops over arrays of the given types in SIMD blocks.
+   *
+   * @details True if `First` is SIMD-enabled (nda::is_simd_enabled_v), every other array is SIMD-enabled for the value
+   * type of `First` and all stride orders agree. Always false without xsimd.
+   *
+   * @tparam First nda::Array type of the first array.
+   * @tparam Rest nda::Array types of the other arrays.
+   */
+  template <typename First, typename... Rest>
+  inline constexpr bool has_simd_loop_v = is_simd_enabled_v<First> and (is_simd_enabled_v<Rest, get_value_t<First>> and ...)
+     and ((get_layout_info<First>.stride_order == get_layout_info<Rest>.stride_order) and ...);
+
+  /**
    * @brief Loop over all elements of one or more nda::Array objects of the same shape in SIMD-width blocks.
    *
    * @details The callables are called as `f(first, rest..., idx...)`. The loop shape is decided at compile time:
-   * - if `first` is SIMD-enabled (nda::is_simd_enabled_v), every other array is SIMD-enabled for the value type of
-   *   `first` and all stride orders agree, `f_simd` is called for every full block of
-   *   `nda::simd::native_simd<value_type>::size` elements and `f_scalar` for the remaining ones; otherwise (always
+   * - if the arrays can be looped over in SIMD blocks (nda::has_simd_loop_v), `f_simd` is called for every full block
+   *   of `nda::simd::native_simd<value_type>::size` elements and `f_scalar` for the remaining ones; otherwise (always
    *   without xsimd) `f_scalar` is called for every element, in the stride order of `first`, and `f_simd` is never
    *   instantiated;
    * - if all arrays are contiguous and elementwise (nda::is_elementwise_v), `idx...` is a single
@@ -210,10 +222,8 @@ namespace nda {
   // NOLINTNEXTLINE (we do not want to forward here)
   FORCEINLINE void for_each_simd([[maybe_unused]] auto &&f_simd, auto &&f_scalar, First &&first, Rest &&...rest) {
     EXPECTS(((first.shape() == rest.shape()) and ...));
-    constexpr auto simd_loop = is_simd_enabled_v<First> and (is_simd_enabled_v<Rest, get_value_t<First>> and ...)
-       and ((get_layout_info<First>.stride_order == get_layout_info<Rest>.stride_order) and ...);
     constexpr auto lhs_stride_order = get_layout_info<First>.stride_order;
-    if constexpr (not simd_loop) {
+    if constexpr (not has_simd_loop_v<First, Rest...>) {
       for_each_static<0, lhs_stride_order>(first.shape(), [&](auto const &...idx) { f_scalar(first, rest..., idx...); });
     } else {
 #ifdef NDA_HAVE_XSIMD
