@@ -90,7 +90,7 @@ namespace nda {
     // Functors of the mapped functions below. operator() is the scalar call; with xsimd, load() is the batch version,
     // constrained to the scalar domain xsimd supports (see the Simd* concepts). nda::map applies operator() element
     // by element and, if the functor has a load for the argument batches, load() in SIMD blocks (see
-    // nda::simd::has_load_function); a functor without a matching load keeps the expression on the scalar path.
+    // nda::has_simd_load_v); a functor without a matching load keeps the expression on the scalar path.
     struct conj_f {
       FORCEINLINE auto operator()(auto const &x) const { return conj(x); }
 
