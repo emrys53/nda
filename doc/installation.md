@@ -34,7 +34,7 @@ option (see @ref cmake_options):
 * [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit) — for GPU support (enable with `-DCudaSupport=ON`)
 * [MAGMA](https://icl.utk.edu/magma/) — for some specific matrix operations on the GPU (enable with `-DUse_Magma=ON`)
 * [xsimd](https://github.com/xtensor-stack/xsimd) — for the SIMD evaluation of array expressions and reductions
-  (enable with `-DSIMDSupport=ON`; xsimd is then fetched at a pinned commit and built automatically)
+  (enable with `-DSIMDSupport=ON`)
 
 **nda** also depends on the following TRIQS libraries, which are fetched and built automatically (unless the user
 explicitly tells CMake to use local installations instead):
