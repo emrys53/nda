@@ -169,6 +169,21 @@ TEST(SIMD, UnsupportedTypes) {
   static_assert(not is_simd_enabled_v<float>);
 }
 
+// A mock functor loads any native batches: the scalar call converts the lanes. Batches with a different lane count
+// than the functor's result keep the expression scalar.
+TEST(SIMD, MockFunctorArguments) {
+  struct plus_one : simd::mock_simd<plus_one, double> {
+    double operator()(double x) const { return x + 1; }
+  };
+  array<std::int64_t, 1> l(2 * simd::native_simd<double>::size + 3);
+  l = 1;
+  static_assert(is_simd_enabled_v<decltype(map(plus_one{})(l))>);
+  array<double, 1> const d = map(plus_one{})(l);
+  for (auto x : d) { EXPECT_EQ(x, 2.0); }
+  array<std::int32_t, 1> s(l.size());
+  static_assert(not is_simd_enabled_v<decltype(map(plus_one{})(s))>);
+}
+
 TEST(SIMD, ScalarBroadcast) {
   array<float, 2> a(5, 7);
   a = 1.5f;
