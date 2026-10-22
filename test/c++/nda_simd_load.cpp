@@ -127,8 +127,8 @@ namespace {
 
     // store the sum of the first two blocks of the fastest dimension into the first one
     int const fastest = decode<2>(get_layout_info<decltype(v)>.stride_order).back();
-    std::array<long, 2> first{}, second{};
-    second[fastest] = w;
+    std::array<long, 2> first{0, 0};
+    std::array<long, 2> const second = (fastest == 0 ? std::array<long, 2>{w, 0} : std::array<long, 2>{0, w});
     auto const sum = load_at(first) + load_at(second);
     store_at(sum, first);
     for (long lane = 0; lane < w; ++lane, ++first[fastest]) { std::apply([&](auto... i) { expect_simd_eq(v(i...), sum.get(lane)); }, first); }
