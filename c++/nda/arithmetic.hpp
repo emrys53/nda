@@ -186,6 +186,10 @@ namespace nda {
      */
     template <typename... Args>
     auto operator()(Args const &...args) const {
+      static_assert(not ((OP == '+' or OP == '-') and algebra == 'M' and (l_is_scalar or r_is_scalar))
+                       or not (std::is_same_v<Args, _linear_index_t> or ...),
+                    "Error in nda::expr: matrix +/- scalar acts on the diagonal and cannot be evaluated with a linear index");
+
       // addition
       if constexpr (OP == '+') {
         if constexpr (l_is_scalar) {
