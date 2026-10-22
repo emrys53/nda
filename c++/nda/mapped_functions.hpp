@@ -96,7 +96,7 @@ namespace nda {
 
 #ifdef NDA_HAVE_XSIMD
       template <typename T>
-        requires(SimdArithmetic<T> or SimdRealOrComplex<T>)
+        requires(simd::SimdArithmetic<T> or simd::SimdRealOrComplex<T>)
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         if constexpr (is_complex_v<T>) {
           using xsimd::conj;
@@ -112,7 +112,7 @@ namespace nda {
       FORCEINLINE auto operator()(auto const &x) const { return detail::real(x); }
 #ifdef NDA_HAVE_XSIMD
       template <typename T>
-        requires((SimdArithmetic<T> or SimdRealOrComplex<T>) and SimdPreservesLaneWidth<remove_complex_t<T>, T>)
+        requires((simd::SimdArithmetic<T> or simd::SimdRealOrComplex<T>) and simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>)
       FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
         if constexpr (is_complex_v<T>) {
           using xsimd::real;
@@ -127,8 +127,8 @@ namespace nda {
     struct imag_f {
       FORCEINLINE auto operator()(auto const &x) const { return detail::imag(x); }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
-        requires SimdPreservesLaneWidth<remove_complex_t<T>, T>
+      template <simd::SimdRealOrComplex T>
+        requires simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>
       FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
         if constexpr (is_complex_v<T>) {
           using xsimd::imag;
@@ -143,8 +143,8 @@ namespace nda {
     struct abs2_f {
       FORCEINLINE auto operator()(auto const &x) const { return detail::abs2(x); }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
-        requires SimdPreservesLaneWidth<remove_complex_t<T>, T>
+      template <simd::SimdRealOrComplex T>
+        requires simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>
       FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
         if constexpr (is_complex_v<T>) {
           using xsimd::norm;
@@ -166,13 +166,13 @@ namespace nda {
         }
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdSigned T>
+      template <simd::SimdSigned T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::abs(x);
       }
 
-      template <SimdComplex T>
-        requires SimdPreservesLaneWidth<remove_complex_t<T>, T>
+      template <simd::SimdComplex T>
+        requires simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>
       FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
         using xsimd::abs;
         return abs(x);
@@ -186,7 +186,7 @@ namespace nda {
         return floor(x);
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdReal T>
+      template <simd::SimdReal T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::floor(x);
       }
@@ -204,7 +204,7 @@ namespace nda {
         }
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return simd::native_simd<T>(static_cast<T>(alpha)) / x;
       }
@@ -220,7 +220,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       // Integer exponents on complex inputs use a distinct std::pow overload; keep those on the scalar path.
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
         requires(std::same_as<P, remove_complex_t<T>> or std::same_as<P, T> or (std::same_as<T, double> and std::is_arithmetic_v<P>))
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         using xsimd::pow;
@@ -236,7 +236,7 @@ namespace nda {
       }
 
 #ifdef NDA_HAVE_XSIMD
-      template <SimdArithmetic T>
+      template <simd::SimdArithmetic T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x, simd::native_simd<T> const &y) const {
         using xsimd::max;
         return max(x, y);
@@ -251,7 +251,7 @@ namespace nda {
       }
 
 #ifdef NDA_HAVE_XSIMD
-      template <SimdArithmetic T>
+      template <simd::SimdArithmetic T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x, simd::native_simd<T> const &y) const {
         using xsimd::min;
         return min(x, y);
@@ -263,7 +263,7 @@ namespace nda {
       FORCEINLINE auto operator()(auto const &x, auto const &y) const { return x * y; }
 
 #ifdef NDA_HAVE_XSIMD
-      template <Vectorizable T>
+      template <simd::Vectorizable T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x, simd::native_simd<T> const &y) const {
         return x * y;
       }
@@ -276,7 +276,7 @@ namespace nda {
         return exp(x);
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::exp(x);
       }
@@ -289,7 +289,7 @@ namespace nda {
         return cos(x);
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::cos(x);
       }
@@ -302,7 +302,7 @@ namespace nda {
         return sin(x);
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::sin(x);
       }
@@ -315,7 +315,7 @@ namespace nda {
         return tan(x);
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::tan(x);
       }
@@ -328,7 +328,7 @@ namespace nda {
         return cosh(x);
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::cosh(x);
       }
@@ -341,7 +341,7 @@ namespace nda {
         return sinh(x);
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::sinh(x);
       }
@@ -354,7 +354,7 @@ namespace nda {
         return tanh(x);
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::tanh(x);
       }
@@ -367,7 +367,7 @@ namespace nda {
         return acos(x);
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::acos(x);
       }
@@ -380,7 +380,7 @@ namespace nda {
         return asin(x);
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::asin(x);
       }
@@ -393,7 +393,7 @@ namespace nda {
         return atan(x);
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::atan(x);
       }
@@ -406,7 +406,7 @@ namespace nda {
         return log(x);
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::log(x);
       }
@@ -419,7 +419,7 @@ namespace nda {
         return sqrt(x);
       }
 #ifdef NDA_HAVE_XSIMD
-      template <SimdRealOrComplex T>
+      template <simd::SimdRealOrComplex T>
       FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::sqrt(x);
       }

@@ -88,7 +88,7 @@ TYPED_TEST(SIMDMath, Functions) {
 
 #ifdef NDA_HAVE_XSIMD
     // the checks above run the native loads whenever T has a batch
-    constexpr bool vectorizable = nda::Vectorizable<T>;
+    constexpr bool vectorizable = nda::simd::Vectorizable<T>;
     static_assert(nda::is_simd_enabled_v<decltype(nda::exp(a))> == vectorizable);
     static_assert(nda::is_simd_enabled_v<decltype(nda::abs2(a))> == vectorizable);
     static_assert(nda::is_simd_enabled_v<decltype(nda::reciprocal(a))> == vectorizable);
@@ -165,38 +165,38 @@ TEST(SIMD, LoadConstraints) {
   static_assert(not unary_loadable<nda::detail::conj_f, double>);
   static_assert(not unary_loadable<nda::detail::real_f, std::complex<double>>);
   // same-type loads that must be rejected by the signature (unsupported value types or domains)
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::max_f, std::complex<double>, std::complex<double>, std::complex<double>>);
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::min_f, std::complex<float>, std::complex<float>, std::complex<float>>);
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::conj_f, bool, bool>);
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::conj_f, long double, long double>);
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::imag_f, int, int>);
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::reciprocal_f<>, float, float>);
-  static_assert(nda::LoadWithNativeSimdTo<nda::detail::reciprocal_f<float>, float, float>);
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::pow_f<>, float, float>);
-  static_assert(nda::LoadWithNativeSimdTo<nda::detail::pow_f<float>, float, float>);
-  static_assert(nda::LoadWithNativeSimdTo<nda::detail::pow_f<int>, double, double>);
-  static_assert(nda::LoadWithNativeSimdTo<nda::detail::abs2_f, float, float>);
-  static_assert(nda::LoadWithNativeSimdTo<nda::detail::abs2_f, float, std::complex<float>>);
+  static_assert(not nda::simd::LoadWithNativeSimdTo<nda::detail::max_f, std::complex<double>, std::complex<double>, std::complex<double>>);
+  static_assert(not nda::simd::LoadWithNativeSimdTo<nda::detail::min_f, std::complex<float>, std::complex<float>, std::complex<float>>);
+  static_assert(not nda::simd::LoadWithNativeSimdTo<nda::detail::conj_f, bool, bool>);
+  static_assert(not nda::simd::LoadWithNativeSimdTo<nda::detail::conj_f, long double, long double>);
+  static_assert(not nda::simd::LoadWithNativeSimdTo<nda::detail::imag_f, int, int>);
+  static_assert(not nda::simd::LoadWithNativeSimdTo<nda::detail::reciprocal_f<>, float, float>);
+  static_assert(nda::simd::LoadWithNativeSimdTo<nda::detail::reciprocal_f<float>, float, float>);
+  static_assert(not nda::simd::LoadWithNativeSimdTo<nda::detail::pow_f<>, float, float>);
+  static_assert(nda::simd::LoadWithNativeSimdTo<nda::detail::pow_f<float>, float, float>);
+  static_assert(nda::simd::LoadWithNativeSimdTo<nda::detail::pow_f<int>, double, double>);
+  static_assert(nda::simd::LoadWithNativeSimdTo<nda::detail::abs2_f, float, float>);
+  static_assert(nda::simd::LoadWithNativeSimdTo<nda::detail::abs2_f, float, std::complex<float>>);
 
   // type-changing loads: complex batch in, real batch of the same width out
-  static_assert(nda::LoadWithNativeSimdTo<nda::detail::abs_f, double, std::complex<double>>);
-  static_assert(nda::LoadWithNativeSimdTo<nda::detail::abs_f, float, std::complex<float>>);
-  static_assert(nda::LoadWithNativeSimdTo<nda::detail::abs_f, double, double>);
+  static_assert(nda::simd::LoadWithNativeSimdTo<nda::detail::abs_f, double, std::complex<double>>);
+  static_assert(nda::simd::LoadWithNativeSimdTo<nda::detail::abs_f, float, std::complex<float>>);
+  static_assert(nda::simd::LoadWithNativeSimdTo<nda::detail::abs_f, double, double>);
   // Same-type loads must also agree with the scalar result, which promotes narrow signed integers to int.
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::abs_f, std::int8_t, std::int8_t>);
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::abs_f, std::int16_t, std::int16_t>);
-  static_assert(nda::LoadWithNativeSimdTo<nda::detail::abs_f, int, int>);
-  static_assert(nda::LoadWithNativeSimdTo<nda::detail::real_f, double, std::complex<double>>);
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::real_f, std::complex<double>, std::complex<double>>);
-  static_assert(nda::LoadWithNativeSimdTo<nda::detail::max_f, double, double, double>);
-  static_assert(not nda::LoadWithNativeSimdTo<nda::detail::max_f, double, std::complex<double>, std::complex<double>>);
+  static_assert(not nda::simd::LoadWithNativeSimdTo<nda::detail::abs_f, std::int8_t, std::int8_t>);
+  static_assert(not nda::simd::LoadWithNativeSimdTo<nda::detail::abs_f, std::int16_t, std::int16_t>);
+  static_assert(nda::simd::LoadWithNativeSimdTo<nda::detail::abs_f, int, int>);
+  static_assert(nda::simd::LoadWithNativeSimdTo<nda::detail::real_f, double, std::complex<double>>);
+  static_assert(not nda::simd::LoadWithNativeSimdTo<nda::detail::real_f, std::complex<double>, std::complex<double>>);
+  static_assert(nda::simd::LoadWithNativeSimdTo<nda::detail::max_f, double, double, double>);
+  static_assert(not nda::simd::LoadWithNativeSimdTo<nda::detail::max_f, double, std::complex<double>, std::complex<double>>);
 
   // A load that changes the SIMD width (double -> float batches) must not be dispatched natively.
   struct narrowing_f {
     float operator()(double x) const { return static_cast<float>(x); }
     [[nodiscard]] nda::simd::native_simd<float> load(nda::simd::native_simd<double> const &) const { return {0.f}; }
   };
-  static_assert(nda::LoadWithNativeSimdTo<narrowing_f, float, double>);
+  static_assert(nda::simd::LoadWithNativeSimdTo<narrowing_f, float, double>);
   using narrowing_expr = decltype(nda::map(narrowing_f{})(std::declval<nda::array<double, 1> &>()));
   static_assert(std::same_as<nda::get_value_t<narrowing_expr>, float>);
   static_assert(not nda::is_simd_enabled_v<narrowing_expr>);
@@ -205,6 +205,6 @@ TEST(SIMD, LoadConstraints) {
   static_assert(not unary_loadable<nda::detail::floor_f, nda::simd::native_simd<std::complex<double>>>);
   static_assert(not unary_loadable<nda::detail::exp_f, nda::simd::native_simd<int>>);
   static_assert(not unary_loadable<nda::detail::abs_f, nda::simd::native_simd<unsigned int>>);
-  static_assert(nda::LoadWithNativeSimdTo<nda::detail::exp_f, double, double>);
+  static_assert(nda::simd::LoadWithNativeSimdTo<nda::detail::exp_f, double, double>);
 }
 #endif
