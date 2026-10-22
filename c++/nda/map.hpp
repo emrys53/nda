@@ -151,7 +151,7 @@ namespace nda {
      *
      * @details Calls `f.load(...)` with the batches of the arguments at the given index. The callable therefore
      * needs a `load` member for native batches (see nda::simd::LoadWithNativeSimdTo), either hand-written or provided by
-     * nda::simd::mock_simd; whether a whole expression tree can be loaded is decided by nda::simd::has_load_function.
+     * nda::simd::mock_simd.
      *
      * @tparam Args Types of the multi-index or nda::_linear_index_t.
      * @param args Index of the first element of the block.

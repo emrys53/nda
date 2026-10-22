@@ -296,8 +296,7 @@ namespace nda {
      * @details Loads the batches of the array operands at the given index and combines them with the operation. A
      * scalar operand is broadcast as a batch of the expression's value type. For matrix +/- scalar, which only adds
      * the scalar on the diagonal, the scalar is applied to the lane of the block that holds a diagonal element, if
-     * any. Whether a whole expression tree can be loaded is decided by nda::simd::has_load_function and
-     * nda::is_simd_enabled_v.
+     * any.
      *
      * @tparam Args Types of the multi-index or nda::_linear_index_t.
      * @param args Index of the first element of the block.
