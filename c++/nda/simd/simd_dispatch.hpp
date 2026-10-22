@@ -68,7 +68,7 @@ namespace nda {
   namespace simd {
 
     /**
-     * @addtogroup utils_type_traits
+     * @addtogroup simd
      * @{
      */
 
@@ -122,6 +122,11 @@ namespace nda {
   } // namespace simd
 
   /**
+   * @addtogroup simd
+   * @{
+   */
+
+  /**
    * @brief Constexpr variable that is true if an expression of type `A` is evaluated into values of type `T` with
    * native SIMD loads.
    *
@@ -148,5 +153,7 @@ namespace nda {
       return false;
     }
   }();
+
+  /** @} */
 
 } // namespace nda
