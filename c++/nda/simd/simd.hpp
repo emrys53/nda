@@ -25,9 +25,7 @@ namespace nda::simd {
    * @brief Native SIMD batch of the scalar type `T`.
    *
    * @details Transparent alias of `xsimd::batch<T>`, the widest batch the target architecture offers for `T`, e.g.
-   * 8 doubles with AVX-512, 4 with AVX2 and 2 with SSE2. Being a transparent alias, `T` is deducible from a batch
-   * argument. xsimd provides native batches for the arithmetic types and for `std::complex<float>` and
-   * `std::complex<double>`, but not for `bool` or `long double`.
+   * 8 doubles with AVX-512, 4 with AVX2 and 2 with SSE2.
    *
    * @tparam T Scalar type.
    */
