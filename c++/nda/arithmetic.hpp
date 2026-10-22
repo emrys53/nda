@@ -300,7 +300,7 @@ namespace nda {
       // matrix +/- scalar only touches the diagonal: apply the scalar in the lane of the block starting at (i, j) that holds it, if any
       auto diagonal_simd = [this](long i, long j) {
         // only instantiated for matrix +/- scalar
-        if constexpr (sizeof...(Args) == 2 and (Vectorizable<L_t> or Vectorizable<R_t>) and ((get_algebra<L_t> == 'M' and r_is_scalar) or (get_algebra<R_t> == 'M' and l_is_scalar))) {
+        if constexpr (sizeof...(Args) == 2 and (simd::Vectorizable<L_t> or simd::Vectorizable<R_t>) and ((get_algebra<L_t> == 'M' and r_is_scalar) or (get_algebra<R_t> == 'M' and l_is_scalar))) {
 
           // lane of the diagonal element (C-layout: i - j, F-layout: j - i)
           long diff = i - j;

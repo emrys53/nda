@@ -128,8 +128,8 @@ namespace {
     static_assert(has_contiguous_layout<decltype(abs(m))>);
 
     // matrix +/- scalar must still take the SIMD path (diagonal lane select), not the scalar fallback
-    static_assert(is_simd_enabled_v<decltype(m + scalar)> == Vectorizable<T>);
-    static_assert(is_simd_enabled_v<decltype(scalar - m)> == Vectorizable<T>);
+    static_assert(is_simd_enabled_v<decltype(m + scalar)> == simd::Vectorizable<T>);
+    static_assert(is_simd_enabled_v<decltype(scalar - m)> == simd::Vectorizable<T>);
 
     auto diagonal = [&](long i, long j) { return i == j ? scalar : T{0}; };
     check_assignment(result, m + other, [&](long i, long j) { return m(i, j) + other(i, j); });

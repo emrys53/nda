@@ -150,7 +150,7 @@ namespace nda {
      * operator, requires xsimd).
      *
      * @details Calls `f.load(...)` with the batches of the arguments at the given index. The callable therefore
-     * needs a `load` member for native batches (see nda::LoadWithNativeSimdTo), either hand-written or provided by
+     * needs a `load` member for native batches (see nda::simd::LoadWithNativeSimdTo), either hand-written or provided by
      * nda::simd::mock_simd; whether a whole expression tree can be loaded is decided by nda::simd::has_load_function.
      *
      * @tparam Args Types of the multi-index or nda::_linear_index_t.

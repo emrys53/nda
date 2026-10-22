@@ -76,12 +76,12 @@ namespace nda {
      * @brief Check if an expression tree can be loaded as a `nda::simd::native_simd<T_in>` batch using only native SIMD loads.
      *
      * @details Every node must produce the value type `T` it is asked for:
-     * - arrays/views: `T` must be nda::Vectorizable,
+     * - arrays/views: `T` must be nda::simd::Vectorizable,
      * - nda::expr_unary, nda::expr: the operands are checked with the same `T` (a scalar operand is broadcast as `T` and
      *   must be convertible to it),
      * - nda::expr_call: may change the value type (e.g. `abs` of a complex array); the arguments are checked with their
-     *   own value types, all batches must have the same width (nda::SimdPreservesLaneWidth) and `F::load` must map
-     *   the argument batches to a batch of `T` (nda::LoadWithNativeSimdTo).
+     *   own value types, all batches must have the same width (nda::simd::SimdPreservesLaneWidth) and `F::load` must map
+     *   the argument batches to a batch of `T` (nda::simd::LoadWithNativeSimdTo).
      *
      * @tparam A_in Type of the expression.
      * @tparam T_in Scalar type the expression has to produce (defaults to its own value type).
