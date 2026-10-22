@@ -126,7 +126,7 @@ namespace nda {
       using simd_t = simd::native_simd<T>;
       simd_t acc(identity);
       T r = init;
-      if constexpr (has_contiguous_layout<A> and supports_flat_loop_v<A>) {
+      if constexpr (has_contiguous_layout<A> and is_elementwise_v<A>) {
         constexpr long w = simd_t::size;
         const auto n     = a.size();
         long k           = 0;
