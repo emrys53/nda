@@ -429,13 +429,52 @@ TEST(SIMD, OverlappingAssignment) {
 }
 
 TEST(SIMD, ForEachSimdBatchesAndTail) {
+  // f_simd is called for every full block and f_scalar for the remaining elements: in one loop over the linear index
+  // if all arrays are contiguous and elementwise, otherwise row by row along the fastest dimension, where blocks never
+  // cross a row and every row has its own tail
   constexpr long lanes = simd::native_simd<double>::size;
-  constexpr long n     = 2 * lanes + 3;
+  constexpr long n     = 2 * lanes + 1; // two blocks and one remaining element
+
+  // contiguous and elementwise: one loop over the linear index
   array<double, 1> d(n);
-  long blocks = 0, elements = 0;
-  for_each_simd([&](auto const &...) { ++blocks; }, [&](auto const &...) { ++elements; }, d, d + d);
-  EXPECT_EQ(blocks, n / lanes);
-  EXPECT_EQ(elements, n % lanes);
+  std::vector<long> blocks, tail;
+  for_each_simd([&](auto const &, auto const &, _linear_index_t k) { blocks.push_back(k.value); },
+                [&](auto const &, auto const &, _linear_index_t k) { tail.push_back(k.value); }, d, d + d);
+  EXPECT_EQ(blocks, (std::vector<long>{0, lanes}));
+  EXPECT_EQ(tail, (std::vector<long>{2 * lanes}));
+
+  // otherwise row by row: two blocks and one remaining element in each of the n rows
+  auto check_rows = [&](auto const &a, int fastest) {
+    std::vector<std::array<long, 2>> row_blocks, row_tail, expected_blocks, expected_tail;
+    for_each_simd([&](auto const &, long i, long j) { row_blocks.push_back({i, j}); },
+                  [&](auto const &, long i, long j) { row_tail.push_back({i, j}); }, a);
+    for (long r = 0; r < n; ++r) {
+      auto at = [&](long k) { return fastest == 1 ? std::array{r, k} : std::array{k, r}; };
+      expected_blocks.push_back(at(0));
+      expected_blocks.push_back(at(lanes));
+      expected_tail.push_back(at(2 * lanes));
+    }
+    EXPECT_EQ(row_blocks, expected_blocks);
+    EXPECT_EQ(row_tail, expected_tail);
+  };
+  // contiguous only along the fastest dimension: the middle plane of rank-3 arrays, in C and F order
+  array<double, 3> c3(n, 3, n);
+  array<double, 3, F_layout> f3(n, 3, n);
+  check_rows(c3(range::all, 1, range::all), 1);
+  check_rows(f3(range::all, 1, range::all), 0);
+  check_rows(c3(range::all, 1, range::all) * 2.0, 1);
+  // contiguous but not elementwise (matrix + scalar acts on the diagonal)
+  matrix<double> m(n, n);
+  check_rows(m + 1.0, 1);
+
+  // rows shorter than a block are visited by f_scalar only
+  array<double, 3> s3(3, 3, lanes - 1);
+  auto short_rows = s3(range::all, 1, range::all);
+  static_assert(is_simd_enabled_v<decltype(short_rows)>);
+  long nblocks = 0, nelements = 0;
+  for_each_simd([&](auto const &...) { ++nblocks; }, [&](auto const &...) { ++nelements; }, short_rows);
+  EXPECT_EQ(nblocks, 0);
+  EXPECT_EQ(nelements, short_rows.size());
 }
 
 TEST(SIMD, ScalarFallbackResults) {
