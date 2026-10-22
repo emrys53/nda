@@ -86,7 +86,6 @@ TYPED_TEST(SIMDMath, Functions) {
       check_expression(nda::min(b, T(0.5) * b), b, [](T x) { return std::min(x, T(0.5) * x); });
     }
 
-#ifdef NDA_HAVE_XSIMD
     // the checks above run the native loads whenever T has a batch
     constexpr bool vectorizable = nda::simd::Vectorizable<T>;
     static_assert(nda::is_simd_enabled_v<decltype(nda::exp(a))> == vectorizable);
@@ -101,7 +100,6 @@ TYPED_TEST(SIMDMath, Functions) {
       static_assert(nda::is_simd_enabled_v<decltype(nda::floor(b))> == vectorizable);
       static_assert(nda::is_simd_enabled_v<decltype(nda::max(b, T(0.5) * b))> == vectorizable);
     }
-#endif
   }
 }
 
@@ -122,9 +120,7 @@ TEST(SIMD, Promotions) {
   // a double exponent promotes floats to double, which changes the lane width, so it stays scalar
   nda::array<float, 1> floats(65);
   floats = 0.5f;
-#ifdef NDA_HAVE_XSIMD
   static_assert(not nda::is_simd_enabled_v<decltype(nda::pow(floats, 2.0))>);
-#endif
   check_expression(nda::pow(floats, 2.0), floats, [](float x) { return std::pow(x, 2.0); });
 }
 
@@ -134,9 +130,7 @@ TEST(SIMD, Composition) {
   fill_random(a, 1, 0.1, 0.9);
   // real/imag change complex -> double but keep the SIMD width, so the whole tree vectorizes
   auto expression = nda::max(nda::real(nda::exp(a)), nda::imag(nda::conj(a)));
-#ifdef NDA_HAVE_XSIMD
   static_assert(nda::is_simd_enabled_v<decltype(expression)>);
-#endif
   nda::array<double, 2, nda::F_layout> result = expression;
   for (long i = 0; i < 5; ++i) {
     for (long j = 0; j < 13; ++j) { expect_close(result(i, j), std::max(std::real(std::exp(a(i, j))), std::imag(std::conj(a(i, j))))); }
@@ -154,7 +148,6 @@ TEST(SIMD, Isnan) {
   EXPECT_EQ(std::count(nan_result.begin(), nan_result.end(), true), 2);
 }
 
-#ifdef NDA_HAVE_XSIMD
 namespace {
   template <typename F, typename T>
   concept unary_loadable = requires(F const &f, T const &x) { f.load(x); };
@@ -207,4 +200,3 @@ TEST(SIMD, LoadConstraints) {
   static_assert(not unary_loadable<nda::detail::abs_f, nda::simd::native_simd<unsigned int>>);
   static_assert(nda::simd::LoadWithNativeSimdTo<nda::detail::exp_f, double, double>);
 }
-#endif
