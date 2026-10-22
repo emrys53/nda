@@ -613,8 +613,10 @@ void assign_from_ndarray(RHS const &rhs) {
   if constexpr (mem::on_device<self_t> || mem::on_device<RHS>) {
     NDA_RUNTIME_ERROR << "Error in assign_from_ndarray: Fallback to elementwise assignment not implemented for arrays/views on the GPU";
   }
-  // SIMD blocks read before they write: take them only if no source may overlap the destination other than in place
+  // for_each_simd falls back to the element loop by itself, but the aliasing check costs a few nanoseconds per
+  // assignment: run it only if the arrays can be looped over in SIMD blocks (never without xsimd)
   if constexpr (has_simd_loop_v<self_t, RHS>) {
+    // SIMD blocks read before they write: take them only if no source may overlap the destination other than in place
     if (mem::detect_aliasing(*this, rhs) != mem::aliasing::may_overlap) {
       nda::for_each_simd([](auto &dst, auto const &src, auto const &...i) { dst.store(src.load(i...), i...); },
                          [](auto &dst, auto const &src, auto const &...i) { dst(i...) = src(i...); }, *this, rhs);
