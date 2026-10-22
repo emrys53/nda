@@ -335,13 +335,13 @@ namespace nda {
   inline constexpr layout_info_t get_layout_info<basic_array_view<ValueType, Rank, Layout, Algebra, AccessorPolicy, OwningPolicy>> =
      basic_array_view<ValueType, Rank, Layout, Algebra, AccessorPolicy, OwningPolicy>::layout_t::layout_info;
 
-  /// Specialization of nda::supports_flat_loop for nda::basic_array types.
+  /// Specialization of nda::is_elementwise for nda::basic_array types.
   template <typename ValueType, int Rank, typename Layout, char Algebra, typename ContainerPolicy>
-  struct supports_flat_loop<basic_array<ValueType, Rank, Layout, Algebra, ContainerPolicy>> : std::true_type {};
+  struct is_elementwise<basic_array<ValueType, Rank, Layout, Algebra, ContainerPolicy>> : std::true_type {};
 
-  /// Specialization of nda::supports_flat_loop for nda::basic_array_view types.
+  /// Specialization of nda::is_elementwise for nda::basic_array_view types.
   template <typename ValueType, int Rank, typename Layout, char Algebra, typename AccessorPolicy, typename OwningPolicy>
-  struct supports_flat_loop<basic_array_view<ValueType, Rank, Layout, Algebra, AccessorPolicy, OwningPolicy>> : std::true_type {};
+  struct is_elementwise<basic_array_view<ValueType, Rank, Layout, Algebra, AccessorPolicy, OwningPolicy>> : std::true_type {};
 
   /**
    * @brief Get the type of the nda::basic_array_view that would be obtained by constructing a view from a given type.
@@ -401,9 +401,9 @@ namespace nda {
   template <char OP, Array A>
   inline constexpr layout_info_t get_layout_info<expr_unary<OP, A>> = get_layout_info<A>;
 
-  /// Specialization of nda::supports_flat_loop for nda::expr_unary types.
+  /// Specialization of nda::is_elementwise for nda::expr_unary types.
   template <char OP, Array A>
-  struct supports_flat_loop<expr_unary<OP, A>> : std::bool_constant<supports_flat_loop_v<A>> {};
+  struct is_elementwise<expr_unary<OP, A>> : std::bool_constant<is_elementwise_v<A>> {};
 
   /// Specialization of nda::get_algebra for nda::expr types.
   template <char OP, typename L, typename R>
@@ -413,11 +413,11 @@ namespace nda {
   template <char OP, typename L, typename R>
   inline constexpr layout_info_t get_layout_info<expr<OP, L, R>> = expr<OP, L, R>::compute_layout_info();
 
-  /// Specialization of nda::supports_flat_loop for nda::expr types: false for matrix +/- scalar, which only touches the diagonal.
+  /// Specialization of nda::is_elementwise for nda::expr types: false for matrix +/- scalar, which only touches the diagonal.
   template <char OP, typename L, typename R>
-  struct supports_flat_loop<expr<OP, L, R>>
+  struct is_elementwise<expr<OP, L, R>>
      : std::bool_constant<not((OP == '+' or OP == '-') and expr<OP, L, R>::algebra == 'M' and (expr<OP, L, R>::l_is_scalar or expr<OP, L, R>::r_is_scalar))
-                          and (expr<OP, L, R>::l_is_scalar or supports_flat_loop_v<L>) and (expr<OP, L, R>::r_is_scalar or supports_flat_loop_v<R>)> {};
+                          and (expr<OP, L, R>::l_is_scalar or is_elementwise_v<L>) and (expr<OP, L, R>::r_is_scalar or is_elementwise_v<R>)> {};
 
   /// Specialization of nda::is_expression for nda::expr_unary types.
   template <char OP, Array A>

@@ -108,19 +108,19 @@ namespace {
     fill_random(other, 2, -1000, 1000);
     const T scalar{3};
 
-    static_assert(not supports_flat_loop_v<T>);
-    static_assert(supports_flat_loop_v<decltype(m(range::all, 0))>);
-    static_assert(supports_flat_loop_v<matrix_t>);
-    static_assert(supports_flat_loop_v<decltype(m + other)>);
-    static_assert(supports_flat_loop_v<decltype(scalar * m - other)>);
-    static_assert(supports_flat_loop_v<decltype(-(m + other))>);
-    static_assert(supports_flat_loop_v<decltype(abs(m + other))>);
-    static_assert(not supports_flat_loop_v<decltype(m + scalar)>);
-    static_assert(not supports_flat_loop_v<decltype(scalar - m)>);
-    static_assert(not supports_flat_loop_v<decltype(m + (m + (m + scalar) + scalar))>);
-    static_assert(not supports_flat_loop_v<decltype(scalar * (m - scalar))>);
-    static_assert(not supports_flat_loop_v<decltype(-(m + scalar))>);
-    static_assert(not supports_flat_loop_v<decltype(abs(m + scalar))>);
+    static_assert(not is_elementwise_v<T>);
+    static_assert(is_elementwise_v<decltype(m(range::all, 0))>);
+    static_assert(is_elementwise_v<matrix_t>);
+    static_assert(is_elementwise_v<decltype(m + other)>);
+    static_assert(is_elementwise_v<decltype(scalar * m - other)>);
+    static_assert(is_elementwise_v<decltype(-(m + other))>);
+    static_assert(is_elementwise_v<decltype(abs(m + other))>);
+    static_assert(not is_elementwise_v<decltype(m + scalar)>);
+    static_assert(not is_elementwise_v<decltype(scalar - m)>);
+    static_assert(not is_elementwise_v<decltype(m + (m + (m + scalar) + scalar))>);
+    static_assert(not is_elementwise_v<decltype(scalar * (m - scalar))>);
+    static_assert(not is_elementwise_v<decltype(-(m + scalar))>);
+    static_assert(not is_elementwise_v<decltype(abs(m + scalar))>);
 
     // matrix +/- scalar reports the layout of the matrix, like every other expression with a scalar operand
     static_assert(has_contiguous_layout<decltype(m + scalar)>);

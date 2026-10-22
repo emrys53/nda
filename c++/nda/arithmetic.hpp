@@ -138,7 +138,7 @@ namespace nda {
      */
     static constexpr layout_info_t compute_layout_info() {
       // a scalar operand has no layout of its own, so the expression has the layout of its array operand; this also
-      // holds for matrix +/- scalar, which only adds the scalar on the diagonal (see nda::supports_flat_loop)
+      // holds for matrix +/- scalar, which only adds the scalar on the diagonal (see nda::is_elementwise)
       if (l_is_scalar) return get_layout_info<R>;
       if (r_is_scalar) return get_layout_info<L>;
       return get_layout_info<R> & get_layout_info<L>; // default case. Take the logical and of all flags
