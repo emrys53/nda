@@ -421,7 +421,7 @@ TEST(SIMD, ForEachSimdScalarFallback) {
   check(d, l);                          // different value types with the same SIMD width
   static_assert(simd::native_simd<double>::size == simd::native_simd<std::int64_t>::size);
   check(ld); // no native batch
-  static_assert(not Vectorizable<long double>);
+  static_assert(not simd::Vectorizable<long double>);
   check(map([](double x) { return x * x; })(d)); // functor without a load function
 }
 
