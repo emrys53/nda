@@ -180,6 +180,50 @@ TEST(SIMD, ScalarBroadcast) {
   for (auto x : result) { EXPECT_EQ(x, 2.0f); }
   matrix<float> m(a), out(5, 7);
   check_assignment(out, m + 1, [](long i, long j) { return i == j ? 2.5f : 1.5f; });
+  // a scalar type without a batch of its own is converted to the value type before it is broadcast
+  static_assert(is_simd_enabled_v<decltype(m + true)>);
+  check_assignment(out, m + true, [](long i, long j) { return i == j ? 2.5f : 1.5f; });
+}
+
+// A real scalar combined with a complex array acts on the components, like std::complex<T> op T: the batches agree
+// with the scalar path bit for bit, also for magnitudes and infinities where a complex division or product would not.
+TEST(SIMD, RealScalarOnComplex) {
+  using C          = std::complex<double>;
+  constexpr long n = 4 * simd::native_simd<C>::size + 3;
+  array<C, 1> z(n);
+  auto expect_same = [&](auto const &expression, auto reference) {
+    static_assert(is_simd_enabled_v<decltype(expression)>);
+    array<C, 1> const result = expression;
+    for (long i = 0; i < n; ++i) { EXPECT_EQ(result(i), reference(z(i))); }
+  };
+  fill_random(z, 7, -10, 10);
+  expect_same(z + 1.5, [](C x) { return x + 1.5; });
+  expect_same(1.5 + z, [](C x) { return 1.5 + x; });
+  expect_same(z - 1.5, [](C x) { return x - 1.5; });
+  expect_same(1.5 - z, [](C x) { return 1.5 - x; });
+  expect_same(z * 3.0, [](C x) { return x * 3.0; });
+  expect_same(3.0 * z, [](C x) { return 3.0 * x; });
+  expect_same(z / 3.0, [](C x) { return x / 3.0; });
+  double const inf = std::numeric_limits<double>::infinity();
+  z                = C{1, 1};
+  expect_same(z / 1e200, [](C x) { return x / 1e200; }); // (1e-200, 1e-200), not (0, 0)
+  z = C{inf, 1};
+  expect_same(z / 2.0, [](C x) { return x / 2.0; }); // (inf, 0.5), not (inf, NaN)
+  z = C{1, inf};
+  expect_same(2.0 * z, [](C x) { return 2.0 * x; }); // (2, inf), not (NaN, inf)
+
+  // the same holds for the diagonal lane of matrix +/- scalar
+  matrix<C> m(n, n);
+  fill_random(m, 8, -10, 10);
+  matrix<C, F_layout> const f(m);
+  matrix<C> const r1       = m - 2.0;
+  matrix<C, F_layout> const r2 = 2.0 - f;
+  for (long i = 0; i < n; ++i) {
+    for (long j = 0; j < n; ++j) {
+      EXPECT_EQ(r1(i, j), (i == j ? m(i, j) - 2.0 : m(i, j)));
+      EXPECT_EQ(r2(i, j), (i == j ? 2.0 - f(i, j) : -f(i, j)));
+    }
+  }
 }
 
 TEST(SIMD, ScalarTree) {
