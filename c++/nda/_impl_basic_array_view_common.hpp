@@ -576,7 +576,7 @@ void assign_from_ndarray(RHS const &rhs) {
     // are both operands strided in 1d?
     static constexpr bool both_1d_strided = has_layout_strided_1d<self_t> and has_layout_strided_1d<RHS>;
     if constexpr (mem::on_host<self_t, RHS> and both_1d_strided) {
-      // Vectorizable copy on host; ordinary pointers preserve overlapping-copy semantics.
+      // vectorizable copy on host
       for (long i = 0; i < size(); ++i) (*this)(_linear_index_t{i}) = rhs(_linear_index_t{i});
       return;
     } else if constexpr (!mem::on_host<self_t, RHS> and have_same_value_type_v<self_t, RHS>) {
@@ -610,20 +610,18 @@ void assign_from_ndarray(RHS const &rhs) {
     }
   }
   // otherwise fallback to elementwise assignment
-  if constexpr (mem::on_device<self_t> or mem::on_device<RHS>) {
+  if constexpr (mem::on_device<self_t> || mem::on_device<RHS>) {
     NDA_RUNTIME_ERROR << "Error in assign_from_ndarray: Fallback to elementwise assignment not implemented for arrays/views on the GPU";
   }
-#ifdef NDA_HAVE_XSIMD
-  if (mem::detect_aliasing(*this, rhs) == mem::aliasing::may_overlap) {
-    // SIMD blocks read before they write; evaluate other overlaps element by element.
-    nda::for_each_static<0, get_layout_info<self_t>.stride_order>(shape(), [this, &rhs](auto const &...i) { (*this)(i...) = rhs(i...); });
-  } else {
-    nda::for_each_simd([](auto &dst, auto const &src, auto const &...i) { dst.store(src.load(i...), i...); },
-                       [](auto &dst, auto const &src, auto const &...i) { dst(i...) = src(i...); }, *this, rhs);
+  // SIMD blocks read before they write: take them only if no source may overlap the destination other than in place
+  if constexpr (has_simd_loop_v<self_t, RHS>) {
+    if (mem::detect_aliasing(*this, rhs) != mem::aliasing::may_overlap) {
+      nda::for_each_simd([](auto &dst, auto const &src, auto const &...i) { dst.store(src.load(i...), i...); },
+                         [](auto &dst, auto const &src, auto const &...i) { dst(i...) = src(i...); }, *this, rhs);
+      return;
+    }
   }
-#else
   nda::for_each_static<0, get_layout_info<self_t>.stride_order>(shape(), [this, &rhs](auto const &...i) { (*this)(i...) = rhs(i...); });
-#endif
 }
 
 // Implementation to fill a view/array with a constant scalar value.
