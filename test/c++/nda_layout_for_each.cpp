@@ -10,6 +10,8 @@
 #include <nda/stdutil/array.hpp>
 
 #include <array>
+#include <cstdint>
+#include <vector>
 
 TEST(NDA, ForEachIndexFromStrideOrder) {
   constexpr auto order_arr  = std::array{1, 2, 0};
@@ -94,4 +96,36 @@ TEST(NDA, ForEachMutable) {
   std::vector<int> data(10, 0);
   nda::for_each(shape, [&, i = 0](long idx) mutable { data[idx] = i++; });
   for (int i = 0; i < 10; ++i) EXPECT_EQ(data[i], i);
+}
+
+// for_each_simd falls back to a scalar loop over multi-indices if the arrays cannot be looped over in SIMD-width
+// blocks (always without xsimd), without instantiating f_simd (here it would not compile).
+TEST(NDA, ForEachSimdScalarFallback) {
+  constexpr long n = 7;
+  auto no_simd     = []<typename... I>(I const &...) { static_assert(nda::always_false<I...>, "f_simd must not be instantiated"); };
+  auto check       = [&](auto const &first, auto const &...rest) {
+    using idx_t = std::array<long, nda::get_rank<decltype(first)>>;
+    std::vector<idx_t> visited, expected;
+    // the callable receives the arrays themselves (not copies), followed by the multi-index
+    if constexpr (sizeof...(rest) == 0) {
+      nda::for_each_simd(no_simd, [&](auto const &x, auto const &...i) { EXPECT_EQ(&x, &first); visited.push_back({i...}); }, first);
+    } else {
+      nda::for_each_simd(no_simd, [&](auto const &x, auto const &, auto const &...i) { EXPECT_EQ(&x, &first); visited.push_back({i...}); },
+                         first, rest...);
+    }
+    nda::for_each(first.shape(), [&](auto const &...i) { expected.push_back({i...}); });
+    EXPECT_EQ(visited, expected);
+  };
+
+  nda::array<double, 2> c(n, n);
+  nda::array<double, 2, nda::F_layout> f(n, n);
+  nda::array<double, 1> d(n);
+  nda::array<std::int64_t, 1> l(n);
+  nda::array<long double, 1> ld(n);
+  check(c(nda::range::all, nda::range(0, n, 2))); // strided fastest dimension
+  check(c, f);                                    // different stride orders
+  check(d, l);                                    // different value types with the same SIMD width
+  check(ld);                                      // no native batch
+  static_assert(not nda::simd::Vectorizable<long double>);
+  check(nda::map([](double x) { return x * x; })(d)); // functor without a load function
 }
