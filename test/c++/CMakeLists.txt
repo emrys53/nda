@@ -27,7 +27,7 @@ if(NOT TblisSupport)
 endif()
 
 if(NOT SIMDSupport)
-  list(FILTER all_tests EXCLUDE REGEX "nda_simd_load")
+  list(FILTER all_tests EXCLUDE REGEX "simd")
 endif()
 
 macro(SetUpAllTestWithMacroDef extension macrodef)
