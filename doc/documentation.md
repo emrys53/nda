@@ -90,7 +90,8 @@ permutations and reductions are expressed in a uniform way independent of the ra
 ## SIMD support
 
 With the CMake option `SIMDSupport=ON`, **nda** links [xsimd](https://github.com/xtensor-stack/xsimd) and evaluates
-suitable lazy expressions in SIMD batches (nda::simd::native_simd, the widest batch of the target architecture).
+suitable lazy expressions in SIMD batches (nda::simd::native_simd, the widest batch of the target architecture). The
+target architecture is set by the compiler flags of the code that includes nda, e.g. `-march=native`.
 
 An expression qualifies (nda::is_simd_enabled_v) if
 - every array operand has an nda::simd::Vectorizable value type (the arithmetic types and `std::complex<float/double>`), a
