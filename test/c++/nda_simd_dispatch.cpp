@@ -216,7 +216,7 @@ TEST(SIMD, ScalarTree) {
 // row-contiguous view.
 TYPED_TEST(SIMDDispatch, Reductions) {
   using T          = TypeParam;
-  constexpr long w = simd_width<T>();
+  constexpr long w = simd::native_simd<T>::size;
   for (long n : {1L, w - 1, w, w + 1, 4 * w - 1, 4 * w, 4 * w + 1, 9 * w + 3}) {
     array<T, 1> a(n);
     fill_random(a, static_cast<unsigned>(n), 0, 1000);
