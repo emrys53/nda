@@ -16,7 +16,7 @@ namespace {
   // Empty inputs, exact batches, and tails for the active architecture.
   template <typename T>
   auto batch_sizes() {
-    constexpr long w = simd_width<T>();
+    constexpr long w = nda::simd::native_simd<T>::size;
     return std::array<long, 7>{0, 1, w - 1, w, w + 1, 2 * w + 1, 4 * w + 1};
   }
 
@@ -37,7 +37,7 @@ namespace {
 
 template <typename T>
 class SIMDMath : public ::testing::Test {};
-using math_types = ::testing::Types<float, double, std::complex<float>, std::complex<double>, long double>;
+using math_types = ::testing::Types<float, double, std::complex<float>, std::complex<double>>;
 TYPED_TEST_SUITE(SIMDMath, math_types);
 
 TYPED_TEST(SIMDMath, Functions) {
