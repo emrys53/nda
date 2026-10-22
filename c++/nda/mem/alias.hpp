@@ -42,8 +42,7 @@ namespace nda::mem {
    *
    * @details Contiguous layouts need only the size, constant-stride layouts (nda::has_layout_strided_1d) only the
    * displacement of the last element, and other layouts sum the negative and the positive displacement of each axis
-   * separately. No element is dereferenced and no overflow check is performed. An empty array/view gives the empty
-   * interval `[p, p)` at its data pointer `p`.
+   * separately. An empty array/view gives the empty interval `[p, p)` at its data pointer `p`.
    *
    * @pre The displacements of the elements are representable and the compile-time layout guarantees hold.
    * @tparam A nda::MemoryArray type.
@@ -151,7 +150,6 @@ namespace nda::mem {
   template <MemoryArray A, Array... B>
   [[nodiscard]] FORCEINLINE aliasing detect_aliasing(A const &dst, B const &...src) {
     if (dst.size() == 0) return aliasing::disjoint;
-    // Calculate destination bounds once for all source operands.
     [[maybe_unused]] auto const checker = detail::alias_checker<A>{dst, get_memory_bounds(dst)};
     return (aliasing::disjoint | ... | checker(src));
   }
