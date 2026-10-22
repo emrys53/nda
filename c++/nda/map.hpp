@@ -158,8 +158,8 @@ namespace nda {
      * @return nda::simd::native_simd batch returned by `f.load`.
      */
     template <typename... Args>
-    [[nodiscard]] FORCEINLINE auto load(Args const &...args) const {
-      return _call_load(std::make_index_sequence<sizeof...(As)>{}, args...);
+    [[nodiscard]] FORCEINLINE auto load(Args &&...args) const {
+      return _call_load(std::make_index_sequence<sizeof...(As)>{}, std::forward<Args>(args)...);
     }
 #endif // NDA_HAVE_XSIMD
 

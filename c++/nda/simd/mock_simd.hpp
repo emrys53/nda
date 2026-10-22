@@ -84,7 +84,7 @@ namespace nda::simd {
 
     public:
     template <typename... Args>
-    FORCEINLINE simd_t load(Args &&...args) const {
+    [[nodiscard]] FORCEINLINE simd_t load(Args &&...args) const {
       static_assert((std::is_same_v<simd_t, std::remove_cvref_t<Args>> and ...), "All types have to be the same.");
       constexpr size_t args_size        = sizeof...(Args);
       std::tuple<Args &&...> args_tuple = std::forward_as_tuple(std::forward<Args>(args)...);

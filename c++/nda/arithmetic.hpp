@@ -363,9 +363,9 @@ namespace nda {
      * @return nda::simd::native_simd batch of the expression's value type.
      */
     template <typename... Args>
-    [[nodiscard]] FORCEINLINE auto load(Args const &...args) const {
+    [[nodiscard]] FORCEINLINE auto load(Args &&...args) const {
       if constexpr (acts_on_diagonal) {
-        static_assert(not (std::is_same_v<Args, _linear_index_t> or ...),
+        static_assert(not (std::is_same_v<std::remove_cvref_t<Args>, _linear_index_t> or ...),
                       "Error in nda::expr: matrix +/- scalar acts on the diagonal and cannot be evaluated with a linear index");
         return load_diagonal(args...);
       } else if constexpr (l_is_scalar) {
