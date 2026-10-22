@@ -56,9 +56,9 @@ namespace nda {
   template <typename F, Array... As>
   inline constexpr bool is_expression<expr_call<F, As...>> = true;
 
-  /// Specialization of nda::is_elementwise for nda::expr_call types: true if all arguments are.
+  /// Specialization of nda::is_elementwise_v for nda::expr_call types: true if all arguments are.
   template <typename F, Array... As>
-  struct is_elementwise<expr_call<F, As...>> : std::bool_constant<(is_elementwise_v<As> and ...)> {};
+  inline constexpr bool is_elementwise_v<expr_call<F, As...>> = (is_elementwise_v<As> and ...);
 
   /**
    * @addtogroup av_math

@@ -132,6 +132,12 @@ namespace nda {
     /// Constexpr variable specifying the algebra of one of the non-scalar operands.
     static constexpr char algebra = (l_is_scalar ? get_algebra<R> : get_algebra<L>);
 
+    /// Constexpr variable that is true for matrix +/- scalar, which adds the scalar on the diagonal only.
+    static constexpr bool acts_on_diagonal = (OP == '+' or OP == '-') and algebra == 'M' and (l_is_scalar or r_is_scalar);
+
+    /// Constexpr variable that is true if every element depends only on the operands' elements at the same position.
+    static constexpr bool is_elementwise = not acts_on_diagonal and (l_is_scalar or is_elementwise_v<L>) and (r_is_scalar or is_elementwise_v<R>);
+
     /**
      * @brief Compute the layout information of the expression.
      * @return nda::layout_info_t object.
@@ -186,8 +192,7 @@ namespace nda {
      */
     template <typename... Args>
     auto operator()(Args const &...args) const {
-      static_assert(not ((OP == '+' or OP == '-') and algebra == 'M' and (l_is_scalar or r_is_scalar))
-                       or not (std::is_same_v<Args, _linear_index_t> or ...),
+      static_assert(not acts_on_diagonal or not (std::is_same_v<Args, _linear_index_t> or ...),
                     "Error in nda::expr: matrix +/- scalar acts on the diagonal and cannot be evaluated with a linear index");
 
       // addition

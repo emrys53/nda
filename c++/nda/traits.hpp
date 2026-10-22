@@ -380,22 +380,23 @@ namespace nda {
   constexpr bool has_layout_smallest_stride_is_one = (has_smallest_stride_is_one(get_layout_info<A>.prop));
 
   /**
-   * @brief Type trait that is std::true_type if every element of type `A` depends only on the elements of its operands
-   * at the same position.
+   * @brief Constexpr variable that is true if every element of type `A` depends only on the elements of its operands at
+   * the same position.
    *
-   * @details std::false_type by default. Specialized for nda::basic_array, nda::basic_array_view and for expressions:
-   * an expression is elementwise if none of its nodes depends on the position of an element; matrix +/- scalar is not,
+   * @details False by default. Specialized for nda::basic_array, nda::basic_array_view and for expressions: an
+   * expression is elementwise if none of its nodes depends on the position of an element; matrix +/- scalar is not,
    * since it adds the scalar on the diagonal only. Together with a contiguous memory layout (nda::has_contiguous_layout),
    * an elementwise expression can be evaluated with one flat loop over the linear index.
    *
    * @tparam A Type to check.
    */
   template <typename A>
-  struct is_elementwise : std::false_type {};
+  inline constexpr bool is_elementwise_v = false;
 
-  /// Constexpr variable that is true if nda::is_elementwise is std::true_type for the cvref-stripped type `A`.
+  // Specialization of nda::is_elementwise_v for cvref types.
   template <typename A>
-  inline constexpr bool is_elementwise_v = is_elementwise<std::remove_cvref_t<A>>::value;
+    requires(!std::is_same_v<A, std::remove_cvref_t<A>>)
+  inline constexpr bool is_elementwise_v<A> = is_elementwise_v<std::remove_cvref_t<A>>;
 
   /**
    * @brief A small wrapper around a single long integer to be used as a linear index.
