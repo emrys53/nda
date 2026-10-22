@@ -93,7 +93,7 @@ With the CMake option `SIMDSupport=ON`, **nda** links [xsimd](https://github.com
 suitable lazy expressions in SIMD batches (nda::simd::native_simd, the widest batch of the target architecture).
 
 An expression qualifies (nda::is_simd_enabled_v) if
-- every array operand has an nda::Vectorizable value type (the arithmetic types and `std::complex<float/double>`), a
+- every array operand has an nda::simd::Vectorizable value type (the arithmetic types and `std::complex<float/double>`), a
 unit stride in its fastest dimension (nda::has_layout_smallest_stride_is_one, e.g. contiguous arrays and views such
 as `a(nda::range::all, 1, nda::range::all)`) and the same stride order as the destination,
 - every node produces the value type of the destination (a `double` scalar combined with a `float` array keeps the
