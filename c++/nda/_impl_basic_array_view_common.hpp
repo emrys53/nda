@@ -297,8 +297,8 @@ public:
  * with stride one. Requires a value type with a native batch (nda::simd::Vectorizable) and a layout whose fastest
  * dimension has unit stride (nda::has_layout_smallest_stride_is_one).
  *
- * All `native_simd_t::size` elements have to exist within the fastest dimension, i.e. the index in that dimension plus
- * the batch size must not exceed its extent. With `NDA_ENFORCE_BOUNDCHECK`, an nda::runtime_error is thrown otherwise.
+ * Precondition: the batch fits in the fastest dimension. Violations throw an nda::runtime_error if
+ * `NDA_ENFORCE_BOUNDCHECK` is defined.
  *
  * @tparam Args Types of the multi-index.
  * @param idx Multi-index of the first element of the block.
@@ -318,8 +318,8 @@ FORCEINLINE native_simd_t load(Args... idx) const noexcept(has_no_boundcheck) {
  * and follow the dimension with stride one. Requires a value type with a native batch (nda::simd::Vectorizable) and a
  * layout whose fastest dimension has unit stride (nda::has_layout_smallest_stride_is_one).
  *
- * All `native_simd_t::size` elements have to exist within the fastest dimension, i.e. the index in that dimension plus
- * the batch size must not exceed its extent. With `NDA_ENFORCE_BOUNDCHECK`, an nda::runtime_error is thrown otherwise.
+ * Precondition: the batch fits in the fastest dimension. Violations throw an nda::runtime_error if
+ * `NDA_ENFORCE_BOUNDCHECK` is defined.
  *
  * @tparam Args Types of the multi-index.
  * @param value Batch to store.
@@ -339,8 +339,8 @@ FORCEINLINE void store(const native_simd_t &value, Args... idx) noexcept(has_no_
  * is needed. Requires a value type with a native batch (nda::simd::Vectorizable) and a contiguous layout
  * (nda::has_contiguous_layout).
  *
- * All `native_simd_t::size` elements have to exist, i.e. `idx.value + native_simd_t::size` must not exceed size(). With
- * `NDA_ENFORCE_BOUNDCHECK`, an nda::runtime_error is thrown otherwise.
+ * Precondition: `idx.value + native_simd_t::size <= size()`. Violations throw an nda::runtime_error if
+ * `NDA_ENFORCE_BOUNDCHECK` is defined.
  *
  * @param idx Linear index of the first element of the block.
  * @return nda::simd::native_simd batch holding the elements.
@@ -358,8 +358,8 @@ FORCEINLINE native_simd_t load(_linear_index_t idx) const noexcept(has_no_boundc
  * memory, so no index arithmetic is needed. Requires a value type with a native batch (nda::simd::Vectorizable) and a
  * contiguous layout (nda::has_contiguous_layout).
  *
- * All `native_simd_t::size` elements have to exist, i.e. `idx.value + native_simd_t::size` must not exceed size(). With
- * `NDA_ENFORCE_BOUNDCHECK`, an nda::runtime_error is thrown otherwise.
+ * Precondition: `idx.value + native_simd_t::size <= size()`. Violations throw an nda::runtime_error if
+ * `NDA_ENFORCE_BOUNDCHECK` is defined.
  *
  * @param value Batch to store.
  * @param idx Linear index of the first element of the block.
