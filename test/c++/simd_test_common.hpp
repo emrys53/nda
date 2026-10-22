@@ -15,16 +15,6 @@
 using simd_types = ::testing::Types<std::int32_t, std::int64_t, std::uint32_t, std::uint64_t, float, double,
                                   std::complex<float>, std::complex<double>>;
 
-// Lane count of the native batch of T, or 8 for types without one (e.g. long double), which take the scalar path.
-template <typename T>
-constexpr long simd_width() {
-  if constexpr (nda::simd::Vectorizable<T>) {
-    return static_cast<long>(nda::simd::native_simd<T>::size);
-  } else {
-    return 8;
-  }
-}
-
 template <typename A, typename B>
 void fill_random(A &a, unsigned seed, B lo, B hi) {
   using T      = nda::get_value_t<A>;
