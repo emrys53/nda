@@ -384,9 +384,9 @@ namespace nda {
    * the same position.
    *
    * @details False by default. Specialized for nda::basic_array, nda::basic_array_view and for expressions: an
-   * expression is elementwise if none of its nodes depends on the position of an element; matrix +/- scalar is not,
-   * since it adds the scalar on the diagonal only. Together with a contiguous memory layout (nda::has_contiguous_layout),
-   * an elementwise expression can be evaluated with one flat loop over the linear index.
+   * expression is elementwise if none of its nodes depends on the position of an element. Together with a contiguous
+   * memory layout (nda::has_contiguous_layout), an elementwise expression can be evaluated with one flat loop over the
+   * linear index.
    *
    * @tparam A Type to check.
    */
