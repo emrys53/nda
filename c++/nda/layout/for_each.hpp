@@ -85,11 +85,12 @@ namespace nda {
       const long imax        = get_extent<J, R, StaticExtents>(shape);
       // Only difference from scalar implementation is that in the last dimension we call f_simd whenever we can.
       if constexpr (I == R - 1) {
-        size_t i          = 0;
-        const size_t ilim = imax & -static_cast<int64_t>(SIMD_SIZE);
-        for (; i < ilim; i += SIMD_SIZE) {
+        constexpr long w = SIMD_SIZE;
+        const long ilim  = imax & -w;
+        long i           = 0;
+        for (; i < ilim; i += w) {
           std::apply(f_simd, idxs);
-          idxs[J] += SIMD_SIZE;
+          idxs[J] += w;
         }
         for (; i < imax; ++i) {
           std::apply(f_scalar, idxs);
@@ -178,36 +179,18 @@ namespace nda {
   }
 
   /**
-   * @brief Loop over all possible index values of a given shape in C-order and in blocks along the last dimension.
-   *
-   * @details See for_each_static(std::array<Int, R> const &, auto &&, auto &&) for the meaning of the callables.
-   *
-   * @tparam SIMD_SIZE Number of indices in a block.
-   * @tparam R Number of dimensions.
-   * @tparam Int Integer type used in the shape array.
-   *
-   * @param shape Shape to loop over (index bounds).
-   * @param f_simd Callable applied to the first index of every full block.
-   * @param f_scalar Callable applied to every index not covered by a block.
-   */
-  template <size_t SIMD_SIZE, auto R, std::integral Int = long>
-  FORCEINLINE void for_each(std::array<Int, R> const &shape, auto &&f_simd, auto &&f_scalar) { // NOLINT (we do not want to forward here)
-    auto idxs = nda::stdutil::make_initialized_array<R>(0l);
-    detail::for_each_static_impl<0, 0, 0, SIMD_SIZE>(shape, idxs, f_simd, f_scalar);
-  }
-
-#ifdef NDA_HAVE_XSIMD
-  /**
    * @brief Loop over all elements of one or more nda::Array objects of the same shape in SIMD-width blocks.
    *
    * @details The callables are called as `f(first, rest..., idx...)`. The loop shape is decided at compile time:
    * - if `first` is SIMD-enabled (nda::is_simd_enabled_v), every other array is SIMD-enabled for the value type of
    *   `first` and all stride orders agree, `f_simd` is called for every full block of
-   *   `nda::simd::native_simd<value_type>::size` elements and `f_scalar` for the remaining ones; otherwise `f_scalar`
-   *   is called for every element, in the stride order of `first`, and `f_simd` is never instantiated;
+   *   `nda::simd::native_simd<value_type>::size` elements and `f_scalar` for the remaining ones; otherwise (always
+   *   without xsimd) `f_scalar` is called for every element, in the stride order of `first`, and `f_simd` is never
+   *   instantiated;
    * - if all arrays are contiguous and elementwise (nda::is_elementwise_v), `idx...` is a single
-   *   nda::_linear_index_t and the tail is at most one block; otherwise `idx...` is the multi-index, the blocks follow
-   *   the fastest dimension and every row has its own tail.
+   *   nda::_linear_index_t and the tail is at most one block; otherwise `idx...` is the multi-index and the blocks
+   *   follow the fastest dimension without crossing a row, so every row has its own tail and a row shorter than a
+   *   block is visited by `f_scalar` only.
    *
    * @code{.cpp}
    * nda::array<double, 2> a(16, 16), b(16, 16);
@@ -233,7 +216,11 @@ namespace nda {
     if constexpr (not simd_loop) {
       for_each_static<0, lhs_stride_order>(first.shape(), [&](auto const &...idx) { f_scalar(first, rest..., idx...); });
     } else {
-      constexpr auto simd_size = simd::native_simd<get_value_t<First>>::size;
+#ifdef NDA_HAVE_XSIMD
+      constexpr long simd_size = simd::native_simd<get_value_t<First>>::size;
+#else
+      constexpr long simd_size = 1; // never used: without xsimd no array is SIMD-enabled
+#endif
       constexpr auto flat_loop = has_contiguous_layout<First> and (has_contiguous_layout<Rest> and ...)
          and is_elementwise_v<First> and (is_elementwise_v<Rest> and ...);
       if constexpr (flat_loop) {
@@ -248,7 +235,6 @@ namespace nda {
       }
     }
   }
-#endif // NDA_HAVE_XSIMD
 
   /** @} */
 
