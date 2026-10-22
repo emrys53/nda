@@ -102,7 +102,7 @@ namespace {
   template <typename T, typename Layout>
   void check_flat_loop() {
     using matrix_t   = matrix<T, Layout>;
-    constexpr long n = 2 * simd_width<T>() + 3;
+    constexpr long n = 2 * simd::native_simd<T>::size + 3;
     matrix_t m(n, n), other(n, n), result(n, n);
     fill_random(m, 1, -1000, 1000);
     fill_random(other, 2, -1000, 1000);
