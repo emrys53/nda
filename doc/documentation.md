@@ -90,31 +90,32 @@ permutations and reductions are expressed in a uniform way independent of the ra
 ## SIMD support
 
 With the CMake option `SIMDSupport=ON`, **nda** links [xsimd](https://github.com/xtensor-stack/xsimd) and evaluates
-suitable array expressions in SIMD batches (nda::simd::native_simd, the widest batch of the target architecture).
-Nothing changes in user code: the assignment `dst = expr` decides at compile time whether the expression qualifies
-(nda::is_simd_enabled_v) and evaluates it element by element otherwise, which is also what happens without xsimd.
+suitable lazy expressions in SIMD batches (nda::simd::native_simd, the widest batch of the target architecture).
 
-An expression qualifies if
-- every array operand has a value type with a native batch (nda::simd::Vectorizable: the arithmetic types and
-`std::complex<float/double>`), a unit stride in its fastest dimension (nda::has_layout_smallest_stride_is_one, e.g.
-contiguous arrays and views such as `a(nda::range::all, 1, nda::range::all)`) and the same stride order as the
-destination,
-- every node produces the value type of the destination (a `double` scalar combined with a `float` array, or mixed
-array value types, keep the expression on the scalar path), and
+An expression qualifies (nda::is_simd_enabled_v) if
+- every array operand has an nda::Vectorizable value type (the arithmetic types and `std::complex<float/double>`), a
+unit stride in its fastest dimension (nda::has_layout_smallest_stride_is_one, e.g. contiguous arrays and views such
+as `a(nda::range::all, 1, nda::range::all)`) and the same stride order as the destination,
+- every node produces the value type of the destination (a `double` scalar combined with a `float` array keeps the
+expression on the scalar path), and
 - every mapped function has a SIMD implementation for its argument types: the @ref av_math have one for `float`,
-`double` and their complex types (`abs`, `max` and `min` also for integers).
+`double` and their complex types where xsimd provides the function (`abs`, `max` and `min` also for integers), and
+nda::simd::mock_simd turns any scalar functor into a slow but SIMD-capable one.
 
-The batch implementations are xsimd's, so results can differ from the C library's in the last bits and in special
-cases (`pow(0, 0)`, the subnormal range of `exp` and `log`, complex branch cuts).
+Everything else is evaluated element by element, as without xsimd. The batch implementations are xsimd's, so results
+can differ from the C library's in the last bits and in special cases (`pow(0, 0)`, the subnormal range of `exp` and
+`log`, complex branch cuts).
 
 A SIMD assignment reads a block of elements before it writes it. Exact in-place updates such as `a = a + 1` are
 fine; other overlaps between the destination and an operand (a shifted view of the same buffer) are detected with
-nda::mem::detect_aliasing and evaluated element by element, so that the result is the one of the scalar loop. The
-element-wise assignment traverses in the stride order of the destination, also without xsimd. nda::for_each_simd is
-the underlying blocked traversal and can be used directly.
+nda::mem::may_alias and evaluated element by element. The element-wise assignment traverses in the stride order of
+the destination, also without xsimd; nda::for_each_simd is the underlying blocked traversal.
 
-The reductions nda::sum, nda::product, nda::max_element and nda::min_element run in SIMD batches as well
-(nda::is_simd_enabled_v), which can change the rounding of floating-point sums and products.
+The reductions nda::sum, nda::product, nda::max_element and nda::min_element accumulate in batches as well (four
+independent accumulators over a contiguous operand), which changes the order of the floating-point operations and
+therefore the rounding. `sum` and `product` accumulate in their template parameter `Value` (the value type by
+default): reduce 8- and 16-bit integer arrays with a wider `Value`, e.g. `nda::sum<decltype(a), int>(a)`, since the
+batch accumulation wraps in the narrow type whereas the scalar fold promotes to `int`.
 
 ## Memory layout
 
