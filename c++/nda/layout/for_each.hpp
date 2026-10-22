@@ -205,7 +205,7 @@ namespace nda {
    *   `first` and all stride orders agree, `f_simd` is called for every full block of
    *   `nda::simd::native_simd<value_type>::size` elements and `f_scalar` for the remaining ones; otherwise `f_scalar`
    *   is called for every element, in the stride order of `first`, and `f_simd` is never instantiated;
-   * - if all arrays are contiguous and support a flat loop (nda::supports_flat_loop_v), `idx...` is a single
+   * - if all arrays are contiguous and elementwise (nda::is_elementwise_v), `idx...` is a single
    *   nda::_linear_index_t and the tail is at most one block; otherwise `idx...` is the multi-index, the blocks follow
    *   the fastest dimension and every row has its own tail.
    *
@@ -235,7 +235,7 @@ namespace nda {
     } else {
       constexpr auto simd_size = simd::native_simd<get_value_t<First>>::size;
       constexpr auto flat_loop = has_contiguous_layout<First> and (has_contiguous_layout<Rest> and ...)
-         and supports_flat_loop_v<First> and (supports_flat_loop_v<Rest> and ...);
+         and is_elementwise_v<First> and (is_elementwise_v<Rest> and ...);
       if constexpr (flat_loop) {
         const long n    = first.size();
         const long nlim = n & -simd_size;
