@@ -270,7 +270,6 @@ TEST(SIMD, AssignmentTraversalOrder) {
   EXPECT_EQ(f, (array<double, 2>{{0, 2, 4}, {1, 3, 5}}));
 }
 
-#ifdef NDA_HAVE_XSIMD
 namespace {
 
   template <typename T, typename Layout>
@@ -375,7 +374,6 @@ TEST(SIMD, OverlappingAssignment) {
   whole = whole * 2.0;
   for (long i = 0; i <= n; ++i) { EXPECT_EQ(buffer(i), 2.0 * double(i)); }
 }
-#endif
 
 #ifdef NDA_HAVE_XSIMD
 // for_each_simd falls back to a scalar loop over multi-indices if the arrays cannot be looped over in SIMD-width
