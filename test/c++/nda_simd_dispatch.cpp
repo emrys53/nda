@@ -303,7 +303,7 @@ namespace {
 
       static_assert(not has_contiguous_layout<decltype(tv)>);
       static_assert(has_layout_smallest_stride_is_one<decltype(tv)>);
-      static_assert(supports_flat_loop_v<decltype(tv)>);
+      static_assert(is_elementwise_v<decltype(tv)>);
       check_dispatch<true, true>(tv);
       check_dispatch<true, true>(tv * ov + tv);
       check_dispatch<true, true>(tv + c);
