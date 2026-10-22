@@ -272,7 +272,7 @@ using native_simd_t = simd::native_simd<std::remove_const_t<ValueType>>;
 template <typename... Args>
 void assert_simd_access_bounds(Args const &...idx) const noexcept(has_no_boundcheck) {
   static_assert(has_layout_smallest_stride_is_one<self_t>, "SIMD access requires a contiguous fastest dimension");
-  static_assert(Vectorizable<ValueType>, "SIMD access requires a vectorizable value type");
+  static_assert(simd::Vectorizable<ValueType>, "SIMD access requires a vectorizable value type");
   if constexpr (!has_no_boundcheck) {
     constexpr auto width = native_simd_t::size;
     if constexpr (sizeof...(Args) == 1 and (std::is_same_v<Args, _linear_index_t> and ...)) {
@@ -294,12 +294,11 @@ public:
  * @brief Load a SIMD batch of consecutive elements along the fastest dimension.
  *
  * @details Reads the `native_simd_t::size` elements that start at the given multi-index and follow the dimension
- * with stride one (an unaligned load). Requires a value type with a native batch (nda::Vectorizable) and a layout
- * whose fastest dimension has unit stride (nda::has_layout_smallest_stride_is_one).
+ * with stride one (an unaligned load). Requires a value type with a native batch (nda::simd::Vectorizable) and a
+ * layout whose fastest dimension has unit stride (nda::has_layout_smallest_stride_is_one).
  *
  * The block has to lie inside the fastest dimension. With `NDA_ENFORCE_BOUNDCHECK`, a block that runs past its end
- * throws an nda::runtime_error; callers such as nda::for_each_simd only issue full blocks and handle the remaining
- * elements one by one.
+ * throws an nda::runtime_error.
  *
  * @tparam Args Types of the multi-index (one integer per dimension).
  * @param idx Multi-index of the first element of the block.
@@ -307,8 +306,8 @@ public:
  */
 template <typename... Args>
 FORCEINLINE native_simd_t load(Args... idx) const noexcept(has_no_boundcheck) {
-  const long offset = lay(idx...);
   assert_simd_access_bounds(idx...);
+  const long offset = lay(idx...);
   return native_simd_t::load_unaligned(data() + offset);
 }
 
@@ -316,8 +315,12 @@ FORCEINLINE native_simd_t load(Args... idx) const noexcept(has_no_boundcheck) {
  * @brief Store a SIMD batch to consecutive elements along the fastest dimension.
  *
  * @details Writes the lanes of the batch to the `native_simd_t::size` elements that start at the given multi-index
- * and follow the dimension with stride one (an unaligned store). Same requirements and bounds checks as
- * load(Args...) const.
+ * and follow the dimension with stride one (an unaligned store). Requires a value type with a native batch
+ * (nda::simd::Vectorizable) and a layout whose fastest dimension has unit stride
+ * (nda::has_layout_smallest_stride_is_one).
+ *
+ * The block has to lie inside the fastest dimension. With `NDA_ENFORCE_BOUNDCHECK`, a block that runs past its end
+ * throws an nda::runtime_error.
  *
  * @tparam Args Types of the multi-index (one integer per dimension).
  * @param value Batch to store.
@@ -325,16 +328,20 @@ FORCEINLINE native_simd_t load(Args... idx) const noexcept(has_no_boundcheck) {
  */
 template <typename... Args>
 FORCEINLINE void store(const native_simd_t &value, Args... idx) noexcept(has_no_boundcheck) {
-  const long offset = lay(idx...);
   assert_simd_access_bounds(idx...);
+  const long offset = lay(idx...);
   value.store_unaligned(data() + offset);
 }
 
 /**
  * @brief Load a SIMD batch at a linear index (contiguous layouts only).
  *
- * @details The index is the offset of the first element of the block in memory, so no index arithmetic is needed.
- * With `NDA_ENFORCE_BOUNDCHECK`, a block that runs past the end of the data throws an nda::runtime_error.
+ * @details Reads the `native_simd_t::size` elements that start at the given offset in memory (an unaligned load), so
+ * no index arithmetic is needed. Requires a value type with a native batch (nda::simd::Vectorizable) and a contiguous
+ * layout (nda::has_contiguous_layout).
+ *
+ * The block has to lie inside the data. With `NDA_ENFORCE_BOUNDCHECK`, a block that runs past its end throws an
+ * nda::runtime_error.
  *
  * @param idx Linear index of the first element of the block.
  * @return nda::simd::native_simd batch holding the elements.
@@ -346,7 +353,15 @@ FORCEINLINE native_simd_t load(_linear_index_t idx) const noexcept(has_no_boundc
 }
 
 /**
- * @brief Store a SIMD batch at a linear index (contiguous layouts only), see load(_linear_index_t) const.
+ * @brief Store a SIMD batch at a linear index (contiguous layouts only).
+ *
+ * @details Writes the lanes of the batch to the `native_simd_t::size` elements that start at the given offset in
+ * memory (an unaligned store), so no index arithmetic is needed. Requires a value type with a native batch
+ * (nda::simd::Vectorizable) and a contiguous layout (nda::has_contiguous_layout).
+ *
+ * The block has to lie inside the data. With `NDA_ENFORCE_BOUNDCHECK`, a block that runs past its end throws an
+ * nda::runtime_error.
+ *
  * @param value Batch to store.
  * @param idx Linear index of the first element of the block.
  */

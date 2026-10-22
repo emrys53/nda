@@ -16,7 +16,7 @@
 #include <concepts>
 #include <type_traits>
 
-namespace nda {
+namespace nda::simd {
 
   /**
    * @addtogroup simd
@@ -87,4 +87,4 @@ namespace nda {
 
   /** @} */
 
-} // namespace nda
+} // namespace nda::simd

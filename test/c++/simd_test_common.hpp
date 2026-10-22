@@ -19,7 +19,7 @@ using simd_types = ::testing::Types<std::int32_t, std::int64_t, std::uint32_t, s
 template <typename T>
 constexpr long simd_width() {
 #ifdef NDA_HAVE_XSIMD
-  if constexpr (nda::Vectorizable<T>) { return static_cast<long>(nda::simd::native_simd<T>::size); }
+  if constexpr (nda::simd::Vectorizable<T>) { return static_cast<long>(nda::simd::native_simd<T>::size); }
 #endif
   return 8;
 }
