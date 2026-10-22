@@ -53,7 +53,7 @@ namespace nda::mem {
    * @return nda::mem::memory_bounds of the elements.
    */
   template <MemoryArray A>
-  memory_bounds get_memory_bounds(A const &a) noexcept {
+  [[nodiscard]] memory_bounds get_memory_bounds(A const &a) noexcept {
     constexpr std::uintptr_t itemsize = sizeof(get_value_t<A>);
     auto p = reinterpret_cast<std::uintptr_t>(a.data()); //NOLINT
     if constexpr (has_contiguous_layout<A>) {
@@ -142,7 +142,7 @@ namespace nda::mem {
    * @return True if a source may overlap the destination other than as an exact in-place mapping.
    */
   template <MemoryArray A, Array... B>
-  FORCEINLINE bool may_alias(A const &dst, B const &...src) {
+  [[nodiscard]] FORCEINLINE bool may_alias(A const &dst, B const &...src) {
     if constexpr (sizeof...(B) == 0) return false;
     else {
       if (dst.size() == 0) return false;
