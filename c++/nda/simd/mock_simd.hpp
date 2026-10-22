@@ -30,9 +30,10 @@ namespace nda::simd {
    *
    * @details A functor `F` deriving from `mock_simd<F, T>` and defining `T operator()(T...) const` gains
    * `load(native_simd<U>...)`, which stores the argument batches to arrays, applies the scalar call to every lane (with
-   * the usual conversions of a scalar call) and loads the results back as a `native_simd<T>`. A mapped function with such a
-   * functor takes part in SIMD expression trees (see nda::simd::has_load_function) without a hand-written batch
-   * implementation; it is meant for tests and prototyping, since it is not faster than the scalar path.
+   * the usual conversions of a scalar call) and loads the results back as a `native_simd<T>`. A functor that inherits
+   * from `mock_simd` therefore has the `load` that nda::map requires for SIMD evaluation (nda::simd::LoadWithNativeSimdTo),
+   * so expressions built with it are SIMD-enabled without a hand-written batch implementation. It is meant for tests
+   * and prototyping, since it is not faster than the scalar path.
    *
    * @code{.cpp}
    * struct plus_one : nda::simd::mock_simd<plus_one, double> {
@@ -42,7 +43,7 @@ namespace nda::simd {
    * static_assert(nda::is_simd_enabled_v<decltype(nda::map(plus_one{})(a))>);
    * @endcode
    *
-   * @tparam Derived Functor type (CRTP).
+   * @tparam Derived Functor type.
    * @tparam T Scalar type of the arguments and of the result.
    */
   template <typename Derived, Vectorizable T>
