@@ -49,6 +49,16 @@ namespace {
       std::apply([&](auto... i) { expect_simd_eq(a(i...), y.get(lane)); }, second);
     }
 
+    // the block at a linear index holds the elements at that offset of the flat data; store the double of the second
+    // block into the first one, the second stays untouched
+    auto const z = a.load(_linear_index_t{w});
+    for (long lane = 0; lane < w; ++lane) expect_simd_eq(z.get(lane), a(_linear_index_t{w + lane}));
+    a.store(z + z, _linear_index_t{0});
+    for (long lane = 0; lane < w; ++lane) {
+      expect_simd_eq(a(_linear_index_t{lane}), z.get(lane) + z.get(lane));
+      expect_simd_eq(a(_linear_index_t{w + lane}), z.get(lane));
+    }
+
     // a block running past the end of the fastest dimension throws (the tests enforce bound checks)
     std::array<long, Rank> last{};
     last[fastest] = 32 - w;
