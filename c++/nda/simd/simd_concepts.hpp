@@ -71,19 +71,19 @@ namespace nda::simd {
 
   /// Check if an arithmetic scalar type is signed and has a native SIMD batch.
   template <typename T>
-  concept SimdSigned = SimdArithmetic<T> and std::is_signed_v<std::remove_cvref_t<T>>;
+  concept SimdSignedArithmetic = SimdArithmetic<T> and std::is_signed_v<std::remove_cvref_t<T>>;
 
   /// Check if a scalar type is float or double and has a native SIMD batch.
   template <typename T>
-  concept SimdReal = Vectorizable<T> and FloatOrDouble<T>;
+  concept SimdFloatingPoint = Vectorizable<T> and FloatOrDouble<T>;
 
   /// Check if a scalar type is complex float or complex double and has a native SIMD batch.
   template <typename T>
-  concept SimdComplex = Vectorizable<T> and is_complex_v<T> and SimdReal<remove_complex_t<T>>;
+  concept SimdComplex = Vectorizable<T> and is_complex_v<T> and SimdFloatingPoint<remove_complex_t<T>>;
 
   /// Check if a scalar type is float, double or their complex counterparts and has a native SIMD batch.
   template <typename T>
-  concept SimdRealOrComplex = SimdReal<T> or SimdComplex<T>;
+  concept SimdFloatingPointOrComplex = SimdFloatingPoint<T> or SimdComplex<T>;
 
   /** @} */
 
