@@ -108,7 +108,7 @@ can differ from the C library's in the last bits and in special cases (`pow(0, 0
 
 A SIMD assignment reads a block of elements before it writes it. Exact in-place updates such as `a = a + 1` are
 fine; other overlaps between the destination and an operand (a shifted view of the same buffer) are detected with
-nda::mem::may_alias and evaluated element by element. The element-wise assignment traverses in the stride order of
+nda::mem::detect_aliasing and evaluated element by element. The element-wise assignment traverses in the stride order of
 the destination, also without xsimd; nda::for_each_simd is the underlying blocked traversal.
 
 The reductions nda::sum, nda::product, nda::max_element and nda::min_element accumulate in batches as well (four
