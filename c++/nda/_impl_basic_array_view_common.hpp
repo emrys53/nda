@@ -305,7 +305,7 @@ public:
  * @return nda::simd::native_simd batch holding the elements.
  */
 template <typename... Args>
-FORCEINLINE native_simd_t load(Args... idx) const noexcept(has_no_boundcheck) {
+[[nodiscard]] FORCEINLINE native_simd_t load(Args... idx) const noexcept(has_no_boundcheck) {
   assert_simd_access_bounds(idx...);
   const long offset = lay(idx...);
   return native_simd_t::load_unaligned(data() + offset);
@@ -345,7 +345,7 @@ FORCEINLINE void store(const native_simd_t &value, Args... idx) noexcept(has_no_
  * @param idx Linear index of the first element of the block.
  * @return nda::simd::native_simd batch holding the elements.
  */
-FORCEINLINE native_simd_t load(_linear_index_t idx) const noexcept(has_no_boundcheck) {
+[[nodiscard]] FORCEINLINE native_simd_t load(_linear_index_t idx) const noexcept(has_no_boundcheck) {
   static_assert(has_contiguous_layout<self_t>, "Linear index SIMD access requires a contiguous layout");
   assert_simd_access_bounds(idx);
   return native_simd_t::load_unaligned(data() + idx.value);

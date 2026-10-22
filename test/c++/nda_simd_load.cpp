@@ -66,8 +66,8 @@ namespace {
     ++last[fastest];
     EXPECT_THROW(load_at(last), nda::runtime_error);
     EXPECT_THROW(store_at(x, last), nda::runtime_error);
-    EXPECT_NO_THROW(a.load(_linear_index_t{a.size() - w}));
-    EXPECT_THROW(a.load(_linear_index_t{a.size() - w + 1}), nda::runtime_error);
+    EXPECT_NO_THROW((void)a.load(_linear_index_t{a.size() - w}));
+    EXPECT_THROW((void)a.load(_linear_index_t{a.size() - w + 1}), nda::runtime_error);
     EXPECT_THROW(a.store(x, _linear_index_t{a.size() - w + 1}), nda::runtime_error);
 
     array_t b(shape), c(shape);
