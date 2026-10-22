@@ -72,7 +72,7 @@ namespace {
 
     array_t b(shape), c(shape);
     fill_random(b, 2, 0, 1000);
-    fill_random(c, 3, 1, 1000); // a divisor
+    fill_random(c, 3, 1, 1000);
     check_load(b + c);
     check_load(b - c);
     if constexpr (Algebra == 'A') {
