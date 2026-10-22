@@ -31,6 +31,10 @@ namespace nda::simd {
   template <typename S>
   concept Vectorizable = xsimd::has_simd_register<std::remove_cvref_t<S>>::value;
 
+  /// Check if a type is a native SIMD batch, i.e. nda::simd::native_simd of its value type.
+  template <typename B>
+  concept NativeSimd = std::same_as<std::remove_cvref_t<B>, simd::native_simd<typename std::remove_cvref_t<B>::value_type>>;
+
   /// Check if native SIMD batches of the result and all argument types have the same number of lanes.
   template <typename Out, typename... In>
   concept SimdPreservesLaneWidth = Vectorizable<Out> and (Vectorizable<In> and ...)
@@ -57,6 +61,9 @@ namespace nda::simd {
   // Without xsimd no type is vectorizable, so all SIMD dispatch degrades to the scalar path.
   template <typename S>
   concept Vectorizable = false;
+
+  template <typename B>
+  concept NativeSimd = false;
 
   template <typename Out, typename... In>
   concept SimdPreservesLaneWidth = false;
