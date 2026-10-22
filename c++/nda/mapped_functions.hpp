@@ -97,7 +97,7 @@ namespace nda {
 #ifdef NDA_HAVE_XSIMD
       template <typename T>
         requires(simd::SimdArithmetic<T> or simd::SimdFloatingPointOrComplex<T>)
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         if constexpr (is_complex_v<T>) {
           using xsimd::conj;
           return conj(x);
@@ -113,7 +113,7 @@ namespace nda {
 #ifdef NDA_HAVE_XSIMD
       template <typename T>
         requires((simd::SimdArithmetic<T> or simd::SimdFloatingPointOrComplex<T>) and simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>)
-      FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
         if constexpr (is_complex_v<T>) {
           using xsimd::real;
           return real(x);
@@ -129,7 +129,7 @@ namespace nda {
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
         requires simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>
-      FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
         if constexpr (is_complex_v<T>) {
           using xsimd::imag;
           return imag(x);
@@ -145,7 +145,7 @@ namespace nda {
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
         requires simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>
-      FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
         if constexpr (is_complex_v<T>) {
           using xsimd::norm;
           return norm(x);
@@ -167,13 +167,13 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdSignedArithmetic T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::abs(x);
       }
 
       template <simd::SimdComplex T>
         requires simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>
-      FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
         using xsimd::abs;
         return abs(x);
       }
@@ -187,7 +187,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPoint T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::floor(x);
       }
 #endif
@@ -205,7 +205,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return simd::native_simd<T>(static_cast<T>(alpha)) / x;
       }
 #endif
@@ -222,7 +222,7 @@ namespace nda {
       // Integer exponents on complex inputs use a distinct std::pow overload; keep those on the scalar path.
       template <simd::SimdFloatingPointOrComplex T>
         requires(std::same_as<P, remove_complex_t<T>> or std::same_as<P, T> or (std::same_as<T, double> and std::is_arithmetic_v<P>))
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         using xsimd::pow;
         return pow(x, simd::native_simd<T>(exponent));
       }
@@ -237,7 +237,7 @@ namespace nda {
 
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdArithmetic T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x, simd::native_simd<T> const &y) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x, simd::native_simd<T> const &y) const {
         using xsimd::max;
         return max(x, y);
       }
@@ -252,7 +252,7 @@ namespace nda {
 
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdArithmetic T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x, simd::native_simd<T> const &y) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x, simd::native_simd<T> const &y) const {
         using xsimd::min;
         return min(x, y);
       }
@@ -264,7 +264,7 @@ namespace nda {
 
 #ifdef NDA_HAVE_XSIMD
       template <simd::Vectorizable T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x, simd::native_simd<T> const &y) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x, simd::native_simd<T> const &y) const {
         return x * y;
       }
 #endif
@@ -277,7 +277,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::exp(x);
       }
 #endif
@@ -290,7 +290,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::cos(x);
       }
 #endif
@@ -303,7 +303,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::sin(x);
       }
 #endif
@@ -316,7 +316,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::tan(x);
       }
 #endif
@@ -329,7 +329,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::cosh(x);
       }
 #endif
@@ -342,7 +342,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::sinh(x);
       }
 #endif
@@ -355,7 +355,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::tanh(x);
       }
 #endif
@@ -368,7 +368,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::acos(x);
       }
 #endif
@@ -381,7 +381,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::asin(x);
       }
 #endif
@@ -394,7 +394,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::atan(x);
       }
 #endif
@@ -407,7 +407,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::log(x);
       }
 #endif
@@ -420,7 +420,7 @@ namespace nda {
       }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
-      FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
         return xsimd::sqrt(x);
       }
 #endif
