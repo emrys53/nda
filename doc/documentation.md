@@ -93,24 +93,18 @@ With the CMake option `SIMDSupport=ON`, **nda** links [xsimd](https://github.com
 suitable lazy expressions in SIMD batches (nda::simd::native_simd, the widest batch of the target architecture). The
 target architecture is set by the compiler flags of the code that includes nda, e.g. `-march=native`.
 
-An expression qualifies (nda::is_simd_enabled_v) if
-- every array operand has an nda::simd::Vectorizable value type (the arithmetic types and `std::complex<float/double>`), a
-unit stride in its fastest dimension (nda::has_layout_smallest_stride_is_one, e.g. contiguous arrays and views such
-as `a(nda::range::all, 1, nda::range::all)`) and the same stride order as the destination,
-- every node produces the value type of the destination (a `double` scalar combined with a `float` array keeps the
-expression on the scalar path), and
-- every mapped function has a SIMD implementation for its argument types: the @ref av_math have one for `float`,
-`double` and their complex types where xsimd provides the function (`abs`, `max` and `min` also for integers), and
-nda::simd::mock_simd turns any scalar functor into a slow but SIMD-capable one.
+An assignment `dst = expr` is evaluated in SIMD batches if
+- all arrays have an nda::simd::Vectorizable value type, a unit stride in their fastest dimension
+(nda::has_layout_smallest_stride_is_one or nda::has_contiguous_layout) and the same stride order as `dst`,
+- all nodes of `expr` produce the value type of `dst`,
+- all mapped functions have a SIMD implementation for their argument types, i.e. a `load` member that satisfies
+nda::simd::LoadWithNativeSimdTo, and
+- no array of `expr` overlaps `dst`, except `dst` itself as in `a = a + 1` (nda::mem::detect_aliasing).
 
-Everything else is evaluated element by element, as without xsimd. The batch implementations are xsimd's, so results
-can differ from the C library's in the last bits and in special cases (`pow(0, 0)`, the subnormal range of `exp` and
-`log`, complex branch cuts).
-
-A SIMD assignment reads a block of elements before it writes it. Exact in-place updates such as `a = a + 1` are
-fine; other overlaps between the destination and an operand (a shifted view of the same buffer) are detected with
-nda::mem::detect_aliasing and evaluated element by element. The element-wise assignment traverses in the stride order of
-the destination, also without xsimd; nda::for_each_simd is the underlying blocked traversal.
+The first three conditions are checked at compile time (nda::is_simd_enabled_v), the last one at run time. Everything
+else is evaluated element by element in the stride order of the destination, as without xsimd; nda::for_each_simd is
+the underlying blocked traversal. The batch implementations are xsimd's, so results can differ from the C library's in
+the last bits and in special cases (`pow(0, 0)`, the subnormal range of `exp` and `log`, complex branch cuts).
 
 The reductions nda::sum, nda::product, nda::max_element and nda::min_element accumulate in batches as well (four
 independent accumulators over a contiguous operand), which changes the order of the floating-point operations and
