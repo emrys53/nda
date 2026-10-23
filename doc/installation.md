@@ -16,12 +16,11 @@ If you want to skip the installation step, you can go directly to @ref integrati
 The required dependencies of the C++ **nda** library are:
 
 * C++20 compatible compiler
-* CMake version 3.20
+* CMake version 3.22 or later
 * a BLAS/LAPACK implementation (e.g. [oneMKL](https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl.html#gs.9vs16x) or
 [OpenBLAS](https://www.openblas.net/))
 
-We do not provide explicit version requirements.
-Instead, we refer the user to the **nda** CI builds on
+For tested compiler and dependency versions beyond these minimum requirements, refer to the **nda** CI builds on
 [GitHub Actions](https://github.com/TRIQS/nda/actions), where recent OS and compiler versions are tested.
 
 The following dependencies are **optional and enabled by default**. They can be turned off via the corresponding CMake
@@ -31,8 +30,13 @@ option (see @ref cmake_options):
 * a working MPI implementation, e.g. openmpi or Intel MPI — for distributed-memory parallelism
   (disable with `-DMPISupport=OFF`)
 * [OpenMP](https://www.openmp.org/) — for shared-memory parallelism (disable with `-DOpenMPSupport=OFF`)
+
+The following optional features are **disabled by default**:
+
 * [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit) — for GPU support (enable with `-DCudaSupport=ON`)
-* [MAGMA](https://icl.utk.edu/magma/) — for some specific matrix operations on the GPU (enable with `-DUse_Magma=ON`)
+* [MAGMA](https://icl.utk.edu/magma/) — for some specific matrix operations on the GPU (enable with `-DMagmaSupport=ON`)
+* TBLIS — for CPU tensor operations (enable with `-DTblisSupport=ON`)
+* cuTENSOR — for GPU tensor operations (enable with `-DCudaSupport=ON -DCutensorSupport=ON`)
 * [xsimd](https://github.com/xtensor-stack/xsimd) — for the SIMD evaluation of array expressions and reductions (enable with `-DSIMDSupport=ON`)
 
 **nda** also depends on the following TRIQS libraries, which are fetched and built automatically (unless the user
@@ -45,8 +49,8 @@ explicitly tells CMake to use local installations instead):
 
 @section install_steps Installation steps
 
-1. Download the source code of the latest stable version by cloning the [TRIQS/nda](https://github.com/triqs/nda)
-repository from GitHub:
+1. Clone the [TRIQS/nda](https://github.com/triqs/nda) repository from GitHub, then select a stable release tag as shown
+under @ref versions:
 
     ```console
     $ git clone https://github.com/TRIQS/nda nda.src
@@ -122,6 +126,8 @@ The following options are available:
 | `PythonSupport=ON/OFF`       | Build Python bindings                                | `OFF`   |
 | `CudaSupport=ON/OFF`         | Build with CUDA (GPU) support                        | `OFF`   |
 | `MagmaSupport=ON/OFF`        | Enable batched GEMM via MAGMA                        | `OFF`   |
+| `TblisSupport=ON/OFF`        | Build with TBLIS tensor support                      | `OFF`   |
+| `CutensorSupport=ON/OFF`     | Build with cuTENSOR (requires `CudaSupport=ON`)       | `OFF`   |
 | `SIMDSupport=ON/OFF`         | Build with xsimd SIMD support                        | `OFF`   |
 
 **Tests, benchmarks and documentation**
