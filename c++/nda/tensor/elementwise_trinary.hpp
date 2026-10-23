@@ -86,9 +86,8 @@ namespace nda::tensor {
       require_equal_indices(idx_a, idx_b, get_rank<A>, "elementwise_trinary");
       require_equal_indices(idx_b, idx_c, get_rank<A>, "elementwise_trinary");
       // c = op_ABC(op_AB(alpha * a, beta * b), gamma * c) as a single vectorizable expression
-      detail::visit_binary_expr(op_AB, alpha, a, beta, b, [&](auto const &ab) {
-        detail::visit_binary_expr_unscaled(op_ABC, ab, gamma, c, [&](auto const &abc) { c = abc; });
-      });
+      detail::visit_binary_expr(op_AB, alpha, a, beta, b,
+                                [&](auto const &ab) { detail::visit_binary_expr_unscaled(op_ABC, ab, gamma, c, [&](auto const &abc) { c = abc; }); });
     }
   }
 

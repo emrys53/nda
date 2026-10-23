@@ -868,9 +868,9 @@ void test_elementwise_matrix_on_host() {
     gamma *= 1 - 2i;
   }
 
-  auto A = nda::array<T, 2>::rand({3, 4});
-  auto B = nda::array<T, 2>::rand({3, 4});
-  auto C = nda::array<T, 2>::rand({3, 4});
+  auto A         = nda::array<T, 2>::rand({3, 4});
+  auto B         = nda::array<T, 2>::rand({3, 4});
+  auto C         = nda::array<T, 2>::rand({3, 4});
   auto const A_m = nda::matrix<T>(A);
   auto const B_m = nda::matrix<T>(B);
 
