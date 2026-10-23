@@ -113,12 +113,8 @@ nda::mem::detect_aliasing and evaluated element by element, so that the result i
 element-wise assignment traverses in the stride order of the destination, also without xsimd. nda::for_each_simd is
 the underlying blocked traversal and can be used directly.
 
-The reductions nda::sum, nda::product, nda::max_element and nda::min_element of a qualifying array or expression
-accumulate in batches as well (four independent accumulators over a contiguous operand), which changes the order of
-the floating-point operations and therefore the rounding. `sum` and `product` accumulate in their template parameter
-`Value` (the value type by default), also on the scalar path: 8- and 16-bit integer arrays should be reduced with a
-wider `Value`, e.g. `nda::sum<decltype(a), int>(a)`, since the batch accumulation wraps in the narrow type whereas
-the scalar fold promotes to `int`.
+The reductions nda::sum, nda::product, nda::max_element and nda::min_element run in SIMD batches as well
+(nda::is_simd_enabled_v), which can change the rounding of floating-point sums and products.
 
 ## Memory layout
 
