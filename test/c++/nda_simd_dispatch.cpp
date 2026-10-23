@@ -8,7 +8,6 @@
 #include <nda/simd/mock_simd.hpp>
 #include <nda/simd/simd_dispatch.hpp>
 
-#include <algorithm>
 #include <vector>
 
 using namespace nda;
@@ -310,19 +309,6 @@ TYPED_TEST(SIMDExpressions, Elementwise) {
   check_elementwise<TypeParam, F_layout>();
 }
 
-// The element-wise assignment traverses in the stride order of the destination (visible with a stateful functor).
-TEST(SIMD, AssignmentTraversalOrder) {
-  array<double, 2> c(2, 3);
-  array<double, 2, F_layout> f(2, 3);
-  int k        = 0;
-  auto counter = map([&k](double) { return double(k++); }); // no SIMD load: element by element
-  c            = counter(c);
-  EXPECT_EQ(c, (array<double, 2>{{0, 1, 2}, {3, 4, 5}}));
-  k = 0;
-  f = counter(f);
-  EXPECT_EQ(f, (array<double, 2>{{0, 2, 4}, {1, 3, 5}}));
-}
-
 namespace {
 
   template <typename T, typename Layout>
@@ -481,9 +467,9 @@ TEST(SIMD, ScalarFallbackResults) {
   constexpr long n = 2 * simd::native_simd<double>::size + 3;
   array<double, 1> d(n);
   array<std::int64_t, 1> l(n);
-  // Assignment between different value types.
+  // An expression of another value type than the destination is evaluated element by element.
   for (long i = 0; i < n; ++i) { l(i) = i - 5; }
-  d = l;
+  d = l + 0;
   for (long i = 0; i < n; ++i) { EXPECT_EQ(d(i), double(i - 5)); }
 
   // frobenius_norm of arrays without SIMD loads (scalar nda::sum of nda::abs2)

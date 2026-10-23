@@ -475,6 +475,19 @@ TEST_F(NDAArrayAndView, CrossConstructAndAssignToDifferentLayouts) {
   }
 }
 
+// The element-wise assignment traverses in the stride order of the destination (visible with a stateful functor).
+TEST_F(NDAArrayAndView, AssignmentTraversalOrder) {
+  nda::array<double, 2> c(2, 3);
+  nda::array<double, 2, nda::F_layout> f(2, 3);
+  int k        = 0;
+  auto counter = nda::map([&k](double) { return double(k++); }); // no SIMD load: element by element
+  c            = counter(c);
+  EXPECT_EQ(c, (nda::array<double, 2>{{0, 1, 2}, {3, 4, 5}}));
+  k = 0;
+  f = counter(f);
+  EXPECT_EQ(f, (nda::array<double, 2>{{0, 2, 4}, {1, 3, 5}}));
+}
+
 TEST_F(NDAArrayAndView, FullAccess) {
   // full view on array
   auto A_v = A_3d();
