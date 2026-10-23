@@ -93,18 +93,16 @@ With the CMake option `SIMDSupport=ON`, **nda** links [xsimd](https://github.com
 suitable lazy expressions in SIMD batches (nda::simd::native_simd, the widest batch of the target architecture). The
 target architecture is set by the compiler flags of the code that includes nda, e.g. `-march=native`.
 
-An assignment `dst = expr` is evaluated in SIMD batches if
-- all arrays have an nda::simd::Vectorizable value type, a unit stride in their fastest dimension
-(nda::has_layout_smallest_stride_is_one or nda::has_contiguous_layout) and the same stride order as `dst`,
-- all nodes of `expr` produce the value type of `dst`,
-- all mapped functions have a SIMD implementation for their argument types, i.e. a `load` member that satisfies
-nda::simd::LoadWithNativeSimdTo, and
-- no array of `expr` overlaps `dst`, except `dst` itself as in `a = a + 1` (nda::mem::detect_aliasing).
+An assignment `dst = expr` uses SIMD batches if
 
-The first three conditions are checked at compile time (nda::is_simd_enabled_v), the last one at run time. Everything
-else is evaluated element by element in the stride order of the destination, as without xsimd; nda::for_each_simd is
-the underlying blocked traversal. The batch implementations are xsimd's, so results can differ from the C library's in
-the last bits and in special cases (`pow(0, 0)`, the subnormal range of `exp` and `log`, complex branch cuts).
+- both have unit stride in their fastest dimension and compatible stride orders (nda::has_simd_loop_v),
+- the expression supports native batch loads of the destination's value type (nda::has_simd_load_v), and
+- operands are disjoint from the destination or use the same element mapping (nda::mem::detect_aliasing).
+
+Mapped functions can change the element type, e.g. `abs(complex_array)`, if batch lane counts match and their `load`
+satisfies nda::simd::LoadWithNativeSimdTo. Other assignments use scalar access in the destination's stride order.
+
+SIMD results can differ from scalar library results in rounding and special cases.
 
 The reductions nda::sum, nda::product, nda::max_element and nda::min_element run in SIMD batches as well
 (nda::is_simd_enabled_v), which can change the rounding of floating-point sums and products.
