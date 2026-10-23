@@ -106,11 +106,8 @@ else is evaluated element by element in the stride order of the destination, as 
 the underlying blocked traversal. The batch implementations are xsimd's, so results can differ from the C library's in
 the last bits and in special cases (`pow(0, 0)`, the subnormal range of `exp` and `log`, complex branch cuts).
 
-The reductions nda::sum, nda::product, nda::max_element and nda::min_element accumulate in batches as well (four
-independent accumulators over a contiguous operand), which changes the order of the floating-point operations and
-therefore the rounding. `sum` and `product` accumulate in their template parameter `Value` (the value type by
-default): reduce 8- and 16-bit integer arrays with a wider `Value`, e.g. `nda::sum<decltype(a), int>(a)`, since the
-batch accumulation wraps in the narrow type whereas the scalar fold promotes to `int`.
+The reductions nda::sum, nda::product, nda::max_element and nda::min_element run in SIMD batches as well
+(nda::is_simd_enabled_v), which can change the rounding of floating-point sums and products.
 
 ## Memory layout
 
