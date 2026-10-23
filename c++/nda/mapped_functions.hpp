@@ -74,7 +74,7 @@ namespace nda {
     // element and, if the functor has a load for the argument batches, load() in SIMD blocks (see
     // nda::has_simd_load_v); a functor without a matching load keeps the expression on the scalar path.
     struct conj_f {
-      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const { return conj(x); }
+      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const noexcept { return conj(x); }
 
       template <simd::NativeSimd B>
         requires(simd::SimdArithmetic<typename B::value_type> or simd::SimdFloatingPointOrComplex<typename B::value_type>)
@@ -88,7 +88,7 @@ namespace nda {
     };
 
     struct real_f {
-      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const { return detail::real(x); }
+      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const noexcept { return detail::real(x); }
 
       template <simd::NativeSimd B>
         requires((simd::SimdArithmetic<typename B::value_type> or simd::SimdFloatingPointOrComplex<typename B::value_type>)
@@ -103,7 +103,7 @@ namespace nda {
     };
 
     struct imag_f {
-      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const {
+      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const noexcept {
         using std::imag;
         return imag(x);
       }
@@ -121,7 +121,7 @@ namespace nda {
     };
 
     struct abs2_f {
-      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const { return detail::abs2(x); }
+      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const noexcept { return detail::abs2(x); }
 
       template <simd::NativeSimd B>
         requires(simd::SimdFloatingPointOrComplex<typename B::value_type>
@@ -136,7 +136,7 @@ namespace nda {
     };
 
     struct abs_f {
-      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const {
+      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const noexcept {
         if constexpr (std::is_unsigned_v<std::remove_cvref_t<decltype(x)>>) {
           return x;
         } else {
@@ -154,7 +154,7 @@ namespace nda {
     };
 
     struct floor_f {
-      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const {
+      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const noexcept {
         using std::floor;
         return floor(x);
       }
@@ -169,7 +169,7 @@ namespace nda {
     template <typename S = double>
     struct reciprocal_f {
       S alpha{1};
-      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const {
+      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const noexcept {
         if constexpr (Scalar<std::remove_cvref_t<decltype(x)>>) {
           return alpha / x;
         } else {
@@ -187,7 +187,7 @@ namespace nda {
     template <typename P = double>
     struct pow_f {
       P exponent;
-      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const {
+      [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const noexcept {
         using std::pow;
         return pow(x, exponent);
       }
@@ -209,7 +209,7 @@ namespace nda {
     };
 
     struct max_f {
-      [[nodiscard]] FORCEINLINE auto operator()(auto const &x, auto const &y) const {
+      [[nodiscard]] FORCEINLINE auto operator()(auto const &x, auto const &y) const noexcept {
         using std::max;
         return max(x, y);
       }
@@ -222,7 +222,7 @@ namespace nda {
     };
 
     struct min_f {
-      [[nodiscard]] FORCEINLINE auto operator()(auto const &x, auto const &y) const {
+      [[nodiscard]] FORCEINLINE auto operator()(auto const &x, auto const &y) const noexcept {
         using std::min;
         return min(x, y);
       }
@@ -235,7 +235,7 @@ namespace nda {
     };
 
     struct mul_f {
-      [[nodiscard]] FORCEINLINE auto operator()(auto const &x, auto const &y) const { return x * y; }
+      [[nodiscard]] FORCEINLINE auto operator()(auto const &x, auto const &y) const noexcept(noexcept(x * y)) { return x * y; }
 
       template <simd::NativeSimd B>
         requires simd::Vectorizable<typename B::value_type>
@@ -247,7 +247,7 @@ namespace nda {
 // Functor of a mapped function with the same name in std and in xsimd (batches of float, double and their complex types).
 #define NDA_DETAIL_MATH_FUNCTOR(F)                                                                                                                   \
   struct F##_f {                                                                                                                                     \
-    [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const {                                                                                 \
+    [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const noexcept {                                                                        \
       using std::F;                                                                                                                                  \
       return F(x);                                                                                                                                   \
     }                                                                                                                                                \
