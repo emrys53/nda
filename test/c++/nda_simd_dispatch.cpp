@@ -295,7 +295,7 @@ TYPED_TEST(SIMDDispatch, Reductions) {
       for (auto v : x) { r += static_cast<double>(std::norm(v)); }
       return std::sqrt(r);
     };
-    auto view = m(range::all, range(1, n + 1));
+    auto view    = m(range::all, range(1, n + 1));
     using norm_t = decltype(frobenius_norm(m));
     expect_simd_eq(frobenius_norm(m), static_cast<norm_t>(frobenius(m)));
     expect_simd_eq(frobenius_norm(view), static_cast<norm_t>(frobenius(view)));
