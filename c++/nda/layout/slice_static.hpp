@@ -177,12 +177,10 @@ namespace nda::slice_static {
       auto prop = P == 1 ? layout_prop_e::strided_1d : layout_prop_e::none;
 
       // Whole consecutive dimensions preserve the parent's constant stride.
-      if (has_only_rangeall_and_long and has_strided_1d(orig_layout_prop) and has_at_most_one_rangeall_block)
-        prop = prop | layout_prop_e::strided_1d;
+      if (has_only_rangeall_and_long and has_strided_1d(orig_layout_prop) and has_at_most_one_rangeall_block) prop = prop | layout_prop_e::strided_1d;
 
       // Keeping the fastest dimension whole preserves its unit stride.
-      if (has_smallest_stride_is_one(orig_layout_prop) and last_is_rangeall)
-        prop = prop | layout_prop_e::smallest_stride_is_one;
+      if (has_smallest_stride_is_one(orig_layout_prop) and last_is_rangeall) prop = prop | layout_prop_e::smallest_stride_is_one;
 
       return prop;
     }

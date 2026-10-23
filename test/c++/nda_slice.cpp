@@ -206,7 +206,7 @@ TEST(NDA, SliceLayoutGuarantees) {
   using nda::range;
   nda::array<long, 3> c(5, 3, 16);
   nda::array<long, 3, nda::F_layout> f(16, 3, 5);
-  auto rows = c(range::all, 1, range::all);
+  auto rows    = c(range::all, 1, range::all);
   auto columns = f(range::all, 1, range::all);
 
   // Ranges outside the fastest dimension preserve unit stride.
