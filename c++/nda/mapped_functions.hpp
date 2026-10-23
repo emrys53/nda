@@ -193,15 +193,15 @@ namespace nda {
       }
 
       // Batches only where std::pow(T, P), T the value type of the batch, has type T: an exponent of the real precision
-      // of T or of type T, or any arithmetic exponent for double T. Integer exponents use exponentiation by squaring; a complex base with an
-      // integer exponent is a distinct std::pow overload and stays on the scalar path.
+      // of T or of type T, or any arithmetic exponent for double T. Integer exponents use exponentiation by squaring;
+      // a complex base with an integer exponent is a distinct std::pow overload and stays on the scalar path.
       template <simd::NativeSimd B>
         requires(simd::SimdFloatingPointOrComplex<typename B::value_type>
                  and (std::same_as<P, remove_complex_t<typename B::value_type>> or std::same_as<P, typename B::value_type>
                       or (std::same_as<typename B::value_type, double> and std::is_arithmetic_v<P>)))
       [[nodiscard]] FORCEINLINE auto load(B const &x) const noexcept {
         if constexpr (std::is_integral_v<P>) {
-          return pow(x, exponent); // optimized integer exponentation.
+          return pow(x, exponent); // optimized integer exponentiation.
         } else {
           return pow(x, B(exponent));
         }
@@ -244,7 +244,8 @@ namespace nda {
       }
     };
 
-// Functor of a mapped function with the same name in std and in xsimd (batches of float, double and their complex types).
+// Functor of a mapped function with the same name in std and in xsimd (batches of float, double and their complex
+// types).
 #define NDA_DETAIL_MATH_FUNCTOR(F)                                                                                                                   \
   struct F##_f {                                                                                                                                     \
     [[nodiscard]] FORCEINLINE auto operator()(auto const &x) const noexcept {                                                                        \
