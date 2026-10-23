@@ -124,6 +124,23 @@ TEST(SIMD, Promotions) {
   check_expression(nda::pow(floats, 2.0), floats, [](float x) { return std::pow(x, 2.0); });
 }
 
+// An integer exponent of a double array is applied by exponentiation by squaring: squares are exact and x^0 is 1, in the
+// batches as in the scalar tail (std::pow).
+TEST(SIMD, PowIntegerExponent) {
+  nda::array<double, 1> a(4 * nda::simd::native_simd<double>::size + 3);
+  fill_random(a, 3, -4.0, 4.0);
+  a(0) = 0.0;
+  a(1) = 3.0;
+  static_assert(nda::is_simd_enabled_v<decltype(nda::pow(a, 2))>);
+  nda::array<double, 1> const square = nda::pow(a, 2), zeroth = nda::pow(a, 0), inverse = nda::pow(a, -1), cube = nda::pow(a, 3);
+  for (long i = 0; i < a.size(); ++i) {
+    EXPECT_EQ(square(i), a(i) * a(i));
+    EXPECT_EQ(zeroth(i), 1.0);
+    EXPECT_EQ(inverse(i), 1.0 / a(i));
+    expect_close(cube(i), std::pow(a(i), 3));
+  }
+}
+
 TEST(SIMD, Composition) {
   using complex_t = std::complex<double>;
   nda::array<complex_t, 2, nda::F_layout> a(5, 13);

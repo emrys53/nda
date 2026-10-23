@@ -202,12 +202,18 @@ namespace nda {
         return pow(x, exponent);
       }
 #ifdef NDA_HAVE_XSIMD
-      // Integer exponents on complex inputs use a distinct std::pow overload; keep those on the scalar path.
+      // Batches only where std::pow(T, P) has type T: an exponent of the real precision of T or of type T, or any
+      // arithmetic exponent for double T. Integer exponents use exponentiation by squaring; a complex base with an
+      // integer exponent is a distinct std::pow overload and stays on the scalar path.
       template <simd::SimdFloatingPointOrComplex T>
         requires(std::same_as<P, remove_complex_t<T>> or std::same_as<P, T> or (std::same_as<T, double> and std::is_arithmetic_v<P>))
       [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        using xsimd::pow;
-        return pow(x, simd::native_simd<T>(exponent));
+        if constexpr (std::is_integral_v<P>) {
+          return xsimd::pow(x, exponent); // exact squares and x^0 = 1, like std::pow
+        } else {
+          using xsimd::pow;
+          return pow(x, simd::native_simd<T>(exponent));
+        }
       }
 #endif
     };
