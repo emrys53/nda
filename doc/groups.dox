@@ -517,9 +517,9 @@
  * @defgroup simd SIMD support
  * @brief Batch types, concepts and traits for the SIMD evaluation of array expressions and reductions.
  *
- * @details Available with the CMake option `SIMDSupport=ON` (see @ref installation), which links
- * [xsimd](https://github.com/xtensor-stack/xsimd) and defines `NDA_HAVE_XSIMD`. Without it, the concepts are false and
- * every expression is evaluated element by element.
+ * @details Native batch types require the CMake option `SIMDSupport=ON` (see @ref installation), which links
+ * [xsimd](https://github.com/xtensor-stack/xsimd) and defines `NDA_HAVE_XSIMD`. Without it, the SIMD concepts are false
+ * and expressions use scalar element access.
  */
 
 /**
