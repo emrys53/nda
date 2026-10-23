@@ -52,7 +52,7 @@ namespace nda::mem {
   template <MemoryArray A>
   [[nodiscard]] memory_bounds get_memory_bounds(A const &a) noexcept {
     constexpr std::uintptr_t itemsize = sizeof(get_value_t<A>);
-    auto p = reinterpret_cast<std::uintptr_t>(a.data()); //NOLINT
+    auto p                            = reinterpret_cast<std::uintptr_t>(a.data()); //NOLINT
     if constexpr (has_contiguous_layout<A>) {
       return {.begin = p, .end = p + static_cast<std::uintptr_t>(a.size()) * itemsize};
     } else {
@@ -60,7 +60,7 @@ namespace nda::mem {
       std::ptrdiff_t lo = 0, hi = 0;
       if constexpr (has_layout_strided_1d<A>) {
         // A constant linear stride needs only its final displacement.
-        auto delta = (a.size() - 1) * a.indexmap().min_stride();
+        auto delta            = (a.size() - 1) * a.indexmap().min_stride();
         (delta < 0 ? lo : hi) = delta;
       } else {
         // Each axis extends either the lower or the upper bound.
@@ -70,8 +70,7 @@ namespace nda::mem {
         }
       }
       // Unsigned arithmetic applies negative offsets modulo the address width.
-      return {.begin = p + static_cast<std::uintptr_t>(lo) * itemsize,
-              .end = p + static_cast<std::uintptr_t>(hi) * itemsize + itemsize};
+      return {.begin = p + static_cast<std::uintptr_t>(lo) * itemsize, .end = p + static_cast<std::uintptr_t>(hi) * itemsize + itemsize};
     }
   }
 
@@ -103,17 +102,21 @@ namespace nda::mem {
       mem::memory_bounds bounds;
 
       template <typename T>
-      FORCEINLINE aliasing operator()(T const &) const { return aliasing::may_overlap; }
+      FORCEINLINE aliasing operator()(T const &) const {
+        return aliasing::may_overlap;
+      }
 
       template <Scalar S>
-      FORCEINLINE aliasing operator()(S const &) const { return aliasing::disjoint; }
+      FORCEINLINE aliasing operator()(S const &) const {
+        return aliasing::disjoint;
+      }
 
       template <MemoryArray A>
       FORCEINLINE aliasing operator()(A const &e) const {
         if (e.size() == 0) return aliasing::disjoint;
         if constexpr (std::is_same_v<get_value_t<A>, get_value_t<D>> and get_rank<A> == get_rank<D>) {
-          if (static_cast<void const *>(e.data()) == static_cast<void const *>(dst.data())
-              and e.shape() == dst.shape() and e.indexmap().strides() == dst.indexmap().strides())
+          if (static_cast<void const *>(e.data()) == static_cast<void const *>(dst.data()) and e.shape() == dst.shape()
+              and e.indexmap().strides() == dst.indexmap().strides())
             return aliasing::in_place;
         }
         auto other = mem::get_memory_bounds(e);
@@ -121,10 +124,14 @@ namespace nda::mem {
       }
 
       template <char OP, Array A>
-      FORCEINLINE aliasing operator()(expr_unary<OP, A> const &e) const { return (*this)(e.a); }
+      FORCEINLINE aliasing operator()(expr_unary<OP, A> const &e) const {
+        return (*this)(e.a);
+      }
 
       template <char OP, ArrayOrScalar L, ArrayOrScalar R>
-      FORCEINLINE aliasing operator()(expr<OP, L, R> const &e) const { return (*this)(e.l) | (*this)(e.r); }
+      FORCEINLINE aliasing operator()(expr<OP, L, R> const &e) const {
+        return (*this)(e.l) | (*this)(e.r);
+      }
 
       template <typename F, Array... A>
       FORCEINLINE aliasing operator()(expr_call<F, A...> const &e) const {

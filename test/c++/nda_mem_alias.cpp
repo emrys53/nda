@@ -26,7 +26,7 @@ TEST(NDA, MemoryBounds) {
 
   std::array<double, 64> storage{};
   using linear_layout = nda::basic_layout<0, nda::C_stride_order<2>, nda::layout_prop_e::strided_1d>;
-  using linear_view = nda::array_view<double, 2, linear_layout>;
+  using linear_view   = nda::array_view<double, 2, linear_layout>;
   linear_view forward{linear_view::layout_t{{3, 7}, {14, 2}}, storage.data()};
   linear_view backward{linear_view::layout_t{{3, 7}, {-14, -2}}, storage.data() + 40};
   nda::array_view<double, 2> mixed{{{3, 7}, {10, -2}}, storage.data() + 16};
@@ -50,14 +50,17 @@ TEST(NDA, MemoryAliasViews) {
   EXPECT_EQ(detect_aliasing(head, even), aliasing::may_overlap);
   EXPECT_EQ(detect_aliasing(head, reverse), aliasing::may_overlap);
   EXPECT_EQ(detect_aliasing(head, adjacent), aliasing::disjoint);
-  EXPECT_EQ(detect_aliasing(even, odd), aliasing::may_overlap); // Conservative for interleaved elements.
+  EXPECT_EQ(detect_aliasing(even, odd), aliasing::may_overlap);            // Conservative for interleaved elements.
   EXPECT_EQ(detect_aliasing(head, head + shifted), aliasing::may_overlap); // Exact operands must not hide shifted overlaps.
 }
 
 TEST(NDA, MemoryAliasExpressions) {
   nda::array<double, 1> a(8), b(8), dst(8), empty(0);
-  int calls = 0;
-  auto mapped = nda::map([&](double x, double y) { ++calls; return x + y; })(a, b);
+  int calls   = 0;
+  auto mapped = nda::map([&](double x, double y) {
+    ++calls;
+    return x + y;
+  })(a, b);
   EXPECT_EQ(detect_aliasing(dst, -a + 2.0 * mapped, b), aliasing::disjoint);
   EXPECT_EQ(detect_aliasing(a, mapped), aliasing::in_place); // a is an exact operand, b is disjoint
   EXPECT_EQ(detect_aliasing(empty, mapped), aliasing::disjoint);
