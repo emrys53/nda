@@ -192,7 +192,7 @@ namespace nda {
      */
     template <typename... Args>
     auto operator()(Args const &...args) const {
-      static_assert(not acts_on_diagonal or not (std::is_same_v<Args, _linear_index_t> or ...),
+      static_assert(not acts_on_diagonal or not(std::is_same_v<Args, _linear_index_t> or ...),
                     "Error in nda::expr: matrix +/- scalar acts on the diagonal and cannot be evaluated with a linear index");
 
       // addition
