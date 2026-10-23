@@ -12,6 +12,7 @@
 #pragma once
 
 #include "./concepts.hpp"
+#include "./macros.hpp"
 #include "./map.hpp"
 #include "./simd/simd_concepts.hpp"
 #include "./traits.hpp"
@@ -19,8 +20,8 @@
 #include <algorithm>
 #include <cmath>
 #include <complex>
-#include <cstdlib>
 #include <concepts>
+#include <cstdlib>
 #include <type_traits>
 #include <utility>
 
@@ -43,12 +44,6 @@ namespace nda {
       }
     }
 
-    // Get the imaginary part of a scalar.
-    template <nda::Scalar S>
-    auto imag(S x) {
-      return std::imag(x);
-    }
-
     // Get the complex conjugate of a scalar.
     template <nda::Scalar S>
     auto conj(S x) {
@@ -59,32 +54,17 @@ namespace nda {
       }
     }
 
-    // Preserve floating-point precision; retain double results for integral inputs.
-    template <std::floating_point T>
-    T abs2(T x) { return x * x; }
+    // Get the squared absolute value with the return type of std::norm.
+    FORCEINLINE auto abs2(auto x) { return std::norm(x); }
 
-    template <std::integral T>
-    double abs2(T x) {
-      auto const y = static_cast<double>(x);
-      return y * y;
-    }
-
-    template <std::floating_point T>
-    T abs2(std::complex<T> z) { return std::norm(z); }
-
-    template <std::integral T>
-    double abs2(std::complex<T> z) {
-      std::complex<double> const y(static_cast<double>(z.real()), static_cast<double>(z.imag()));
-      return std::norm(y);
-    }
-
-    // Check if a std::complex<double> is NaN.
-    inline bool isnan(std::complex<double> const &z) { return std::isnan(z.real()) or std::isnan(z.imag()); }
-
-    // Check if a real floating-point scalar is NaN.
-    template <std::floating_point S>
-    bool isnan(S x) {
-      return std::isnan(x);
+    // Check if a scalar or either component of a complex scalar is NaN.
+    template <Scalar S>
+    bool isnan(S const &x) {
+      if constexpr (is_complex_v<S>) {
+        return std::isnan(x.real()) or std::isnan(x.imag());
+      } else {
+        return std::isnan(x);
+      }
     }
 
     // Functors of the mapped functions below. operator() is the scalar call; with xsimd, load() is the batch version,
@@ -125,7 +105,10 @@ namespace nda {
     };
 
     struct imag_f {
-      FORCEINLINE auto operator()(auto const &x) const { return detail::imag(x); }
+      FORCEINLINE auto operator()(auto const &x) const {
+        using std::imag;
+        return imag(x);
+      }
 #ifdef NDA_HAVE_XSIMD
       template <simd::SimdFloatingPointOrComplex T>
         requires simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>

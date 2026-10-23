@@ -180,6 +180,24 @@ TEST(NDA, LayoutAfterReshapeIssue) {
   check(C);
 }
 
+// The array overloads of isnan, abs2 and imag accept every scalar type and nested arrays, with the result types of
+// their scalar counterparts.
+TEST(NDA, MappedMathOfOtherValueTypesIssue) {
+  nda::array<std::complex<long double>, 1> zl(3);
+  zl = std::complex<long double>{1, 2};
+  EXPECT_FALSE(nda::any(nda::isnan(zl)));
+
+  nda::array<std::complex<int>, 1> zi(3);
+  zi = std::complex<int>{3, 4};
+  static_assert(std::is_same_v<nda::get_value_t<decltype(nda::abs2(zi))>, int>); // the type of std::norm
+  EXPECT_EQ(nda::make_regular(nda::abs2(zi)), (nda::array<int, 1>{25, 25, 25}));
+
+  nda::array<nda::array<std::complex<double>, 1>, 1> nested(2);
+  for (auto &v : nested) v = nda::array<std::complex<double>, 1>{{1, 2}, {3, 4}};
+  nda::array<double, 1> const im = nda::imag(nested)(1);
+  EXPECT_EQ(im, (nda::array<double, 1>{2, 4}));
+}
+
 // Unqualified scalar math calls with `using namespace nda` (as done in cppdlr) were ambiguous on libc++, which declares
 // generic templates like `pow(A1, A2)` and `sqrt(Integral)` in the global namespace that tied with the nda function
 // templates. The checks cover every mapped function with a std counterpart, plus their array overloads.
