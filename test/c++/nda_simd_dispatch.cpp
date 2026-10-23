@@ -319,7 +319,7 @@ namespace {
       array<T, 3, Layout> t(n, 3, n), other(n, 3, n), full(n, 3, n);
       fill_random(t, 1, -1000, 1000);
       fill_random(other, 2, -1000, 1000);
-      full = T(-1);
+      full    = T(-1);
       auto tv = t(range::all, 1, range::all);
       auto ov = other(range::all, 1, range::all);
       auto fv = full(range::all, 1, range::all);
