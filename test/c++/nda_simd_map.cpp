@@ -105,7 +105,7 @@ TYPED_TEST(SIMDMath, Functions) {
 
 TEST(SIMD, Promotions) {
   nda::array<std::int8_t, 1> bytes(65);
-  bytes = std::numeric_limits<std::int8_t>::min();
+  bytes          = std::numeric_limits<std::int8_t>::min();
   auto magnitude = nda::abs(bytes);
   static_assert(std::same_as<nda::get_value_t<decltype(magnitude)>, int>);
   nda::array<int, 1> result = magnitude;
@@ -157,9 +157,9 @@ TEST(SIMD, Composition) {
 TEST(SIMD, Isnan) {
   constexpr double nan = std::numeric_limits<double>::quiet_NaN();
   nda::array<std::complex<double>, 2> a(5, 13);
-  a       = std::complex<double>(0.25, 0.125);
-  a(1, 2) = {nan, 0};
-  a(2, 4) = {0, nan};
+  a                              = std::complex<double>(0.25, 0.125);
+  a(1, 2)                        = {nan, 0};
+  a(2, 4)                        = {0, nan};
   nda::array<bool, 2> nan_result = nda::isnan(a);
   EXPECT_TRUE(nan_result(1, 2) and nan_result(2, 4));
   EXPECT_EQ(std::count(nan_result.begin(), nan_result.end(), true), 2);

@@ -235,7 +235,7 @@ namespace nda {
     };
 
     struct mul_f {
-      [[nodiscard]] FORCEINLINE auto operator()(auto const &x, auto const &y) const noexcept(noexcept(x * y)) { return x * y; }
+      [[nodiscard]] FORCEINLINE auto operator()(auto const &x, auto const &y) const noexcept { return x * y; }
 
       template <simd::NativeSimd B>
         requires simd::Vectorizable<typename B::value_type>
