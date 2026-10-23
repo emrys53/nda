@@ -231,7 +231,10 @@ namespace nda {
   {
     if constexpr (nda::Scalar<Value>) {
 #ifdef NDA_HAVE_XSIMD
-      if constexpr (is_simd_enabled_v<A, Value>) { return detail::simd_reduce(a, std::plus<>{}, [](auto const &b) { return xsimd::reduce_add(b); }, Value{0}); }
+      // the scalar fold adds 8- and 16-bit integers in int: batches of their own type would wrap
+      if constexpr (is_simd_enabled_v<A, Value> and std::is_same_v<decltype(Value{} + get_value_t<A>{}), Value>) {
+        return detail::simd_reduce(a, std::plus<>{}, [](auto const &b) { return xsimd::reduce_add(b); }, Value{0});
+      }
 #endif
       return fold(std::plus<>{}, a, Value{0});
     } else {
@@ -350,7 +353,10 @@ namespace nda {
   {
     if constexpr (nda::Scalar<Value>) {
 #ifdef NDA_HAVE_XSIMD
-      if constexpr (is_simd_enabled_v<A, Value>) { return detail::simd_reduce(a, std::multiplies<>{}, [](auto const &b) { return xsimd::reduce_mul(b); }, Value{1}); }
+      // the scalar fold multiplies 8- and 16-bit integers in int: batches of their own type would wrap
+      if constexpr (is_simd_enabled_v<A, Value> and std::is_same_v<decltype(Value{} * get_value_t<A>{}), Value>) {
+        return detail::simd_reduce(a, std::multiplies<>{}, [](auto const &b) { return xsimd::reduce_mul(b); }, Value{1});
+      }
 #endif
       return fold(std::multiplies<>{}, a, Value{1});
     } else {
