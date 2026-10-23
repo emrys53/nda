@@ -148,7 +148,7 @@ template <typename T>
 class SIMDDispatch : public ::testing::Test {};
 TYPED_TEST_SUITE(SIMDDispatch, simd_types);
 
-// The expression tests use abs, which has no overload for unsigned types.
+// The expression tests fill arrays with negative values, so they use signed types only.
 template <typename T>
 class SIMDExpressions : public ::testing::Test {};
 using signed_simd_types = ::testing::Types<std::int32_t, std::int64_t, float, double, std::complex<float>, std::complex<double>>;

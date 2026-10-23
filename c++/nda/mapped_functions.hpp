@@ -333,7 +333,7 @@ namespace nda {
     if constexpr (Array<get_value_t<A>>) {
       return nda::map([](auto const &x) { return nda::reciprocal(x); })(std::forward<A>(a));
     } else {
-      using real_t = remove_complex_t<get_value_t<A>>;
+      using real_t      = remove_complex_t<get_value_t<A>>;
       using numerator_t = std::conditional_t<std::is_floating_point_v<real_t>, real_t, double>;
       return nda::map(detail::reciprocal_f<numerator_t>{numerator_t{1}})(std::forward<A>(a));
     }
@@ -379,6 +379,8 @@ namespace nda {
   using std::abs;
 
   /// \brief Function abs for nda::Array types (lazy and coefficient-wise).
+  ///
+  /// \details Elements of an unsigned type are returned unchanged.
   ///
   /// \tparam A nda::Array type.
   /// \param a nda::Array object.
