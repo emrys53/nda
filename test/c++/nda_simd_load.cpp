@@ -16,8 +16,8 @@ namespace {
   void check_load(E const &expression, long offset = 0) {
     std::array<long, get_rank<E>> index{};
     constexpr auto axis = decode<get_rank<E>>(get_layout_info<E>.stride_order).back();
-    index[axis] = offset;
-    auto batch = std::apply([&](auto... i) { return expression.load(i...); }, index);
+    index[axis]         = offset;
+    auto batch          = std::apply([&](auto... i) { return expression.load(i...); }, index);
     for (size_t lane = 0; lane < decltype(batch)::size; ++lane) {
       std::apply([&](auto... i) { expect_simd_eq(batch.get(lane), expression(i...)); }, index);
       ++index[axis];
@@ -28,7 +28,7 @@ namespace {
   void check_load_store() {
     constexpr long w = simd::native_simd<T>::size;
     auto const shape = stdutil::make_initialized_array<Rank>(32l);
-    using array_t = basic_array<T, Rank, Layout, Algebra, heap<>>;
+    using array_t    = basic_array<T, Rank, Layout, Algebra, heap<>>;
     array_t a(shape);
     fill_random(a, 1, 0, 1000);
     check_load(a);
@@ -129,9 +129,11 @@ namespace {
     int const fastest = decode<2>(get_layout_info<decltype(v)>.stride_order).back();
     std::array<long, 2> first{0, 0};
     std::array<long, 2> const second = (fastest == 0 ? std::array<long, 2>{w, 0} : std::array<long, 2>{0, w});
-    auto const sum = load_at(first) + load_at(second);
+    auto const sum                   = load_at(first) + load_at(second);
     store_at(sum, first);
-    for (long lane = 0; lane < w; ++lane, ++first[fastest]) { std::apply([&](auto... i) { expect_simd_eq(v(i...), sum.get(lane)); }, first); }
+    for (long lane = 0; lane < w; ++lane, ++first[fastest]) {
+      std::apply([&](auto... i) { expect_simd_eq(v(i...), sum.get(lane)); }, first);
+    }
 
     // the planes next to the view are untouched
     for (long i = 0; i < 32; ++i)

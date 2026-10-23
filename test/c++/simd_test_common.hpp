@@ -12,8 +12,8 @@
 #include <limits>
 #include <random>
 
-using simd_types = ::testing::Types<std::int32_t, std::int64_t, std::uint32_t, std::uint64_t, float, double,
-                                  std::complex<float>, std::complex<double>>;
+using simd_types =
+   ::testing::Types<std::int32_t, std::int64_t, std::uint32_t, std::uint64_t, float, double, std::complex<float>, std::complex<double>>;
 
 template <typename A, typename B>
 void fill_random(A &a, unsigned seed, B lo, B hi) {
