@@ -67,41 +67,39 @@ namespace nda {
       }
     }
 
-    // Functors of the mapped functions below. operator() is the scalar call; with xsimd, load() is the batch version,
-    // constrained to the scalar domain xsimd supports (see the Simd* concepts). nda::map applies operator() element
-    // by element and, if the functor has a load for the argument batches, load() in SIMD blocks (see
+    // Functors of the mapped functions below. operator() is the scalar call; load() is the batch version, constrained
+    // to the scalar domain xsimd supports (see the Simd* concepts). load() is a template on the native batch type
+    // (nda::simd::NativeSimd, never satisfied without xsimd) and calls xsimd's functions unqualified, so that they are
+    // found by argument-dependent lookup and the functors compile without xsimd. nda::map applies operator() element by
+    // element and, if the functor has a load for the argument batches, load() in SIMD blocks (see
     // nda::has_simd_load_v); a functor without a matching load keeps the expression on the scalar path.
     struct conj_f {
       FORCEINLINE auto operator()(auto const &x) const { return conj(x); }
 
-#ifdef NDA_HAVE_XSIMD
-      template <typename T>
-        requires(simd::SimdArithmetic<T> or simd::SimdFloatingPointOrComplex<T>)
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        if constexpr (is_complex_v<T>) {
-          using xsimd::conj;
+      template <simd::NativeSimd B>
+        requires(simd::SimdArithmetic<typename B::value_type> or simd::SimdFloatingPointOrComplex<typename B::value_type>)
+      [[nodiscard]] FORCEINLINE auto load(B const &x) const {
+        if constexpr (is_complex_v<typename B::value_type>) {
           return conj(x);
         } else {
           return x;
         }
       }
-#endif
     };
 
     struct real_f {
       FORCEINLINE auto operator()(auto const &x) const { return detail::real(x); }
-#ifdef NDA_HAVE_XSIMD
-      template <typename T>
-        requires((simd::SimdArithmetic<T> or simd::SimdFloatingPointOrComplex<T>) and simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>)
-      [[nodiscard]] FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
-        if constexpr (is_complex_v<T>) {
-          using xsimd::real;
+
+      template <simd::NativeSimd B>
+        requires((simd::SimdArithmetic<typename B::value_type> or simd::SimdFloatingPointOrComplex<typename B::value_type>)
+                 and simd::SimdPreservesLaneWidth<remove_complex_t<typename B::value_type>, typename B::value_type>)
+      [[nodiscard]] FORCEINLINE auto load(B const &x) const {
+        if constexpr (is_complex_v<typename B::value_type>) {
           return real(x);
         } else {
           return x;
         }
       }
-#endif
     };
 
     struct imag_f {
@@ -109,34 +107,32 @@ namespace nda {
         using std::imag;
         return imag(x);
       }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-        requires simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
-        if constexpr (is_complex_v<T>) {
-          using xsimd::imag;
+
+      template <simd::NativeSimd B>
+        requires(simd::SimdFloatingPointOrComplex<typename B::value_type>
+                 and simd::SimdPreservesLaneWidth<remove_complex_t<typename B::value_type>, typename B::value_type>)
+      [[nodiscard]] FORCEINLINE auto load(B const &x) const {
+        if constexpr (is_complex_v<typename B::value_type>) {
           return imag(x);
         } else {
-          return simd::native_simd<T>(0);
+          return B(0);
         }
       }
-#endif
     };
 
     struct abs2_f {
       FORCEINLINE auto operator()(auto const &x) const { return detail::abs2(x); }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-        requires simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
-        if constexpr (is_complex_v<T>) {
-          using xsimd::norm;
+
+      template <simd::NativeSimd B>
+        requires(simd::SimdFloatingPointOrComplex<typename B::value_type>
+                 and simd::SimdPreservesLaneWidth<remove_complex_t<typename B::value_type>, typename B::value_type>)
+      [[nodiscard]] FORCEINLINE auto load(B const &x) const {
+        if constexpr (is_complex_v<typename B::value_type>) {
           return norm(x);
         } else {
           return x * x;
         }
       }
-#endif
     };
 
     struct abs_f {
@@ -148,13 +144,13 @@ namespace nda {
           return abs(x);
         }
       }
-#ifdef NDA_HAVE_XSIMD
-      template <typename T>
-        requires((simd::SimdSignedArithmetic<T> or simd::SimdComplex<T>) and simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>)
-      [[nodiscard]] FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
-        return xsimd::abs(x);
+
+      template <simd::NativeSimd B>
+        requires((simd::SimdSignedArithmetic<typename B::value_type> or simd::SimdComplex<typename B::value_type>)
+                 and simd::SimdPreservesLaneWidth<remove_complex_t<typename B::value_type>, typename B::value_type>)
+      [[nodiscard]] FORCEINLINE auto load(B const &x) const {
+        return abs(x);
       }
-#endif
     };
 
     struct floor_f {
@@ -162,12 +158,12 @@ namespace nda {
         using std::floor;
         return floor(x);
       }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPoint T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::floor(x);
+
+      template <simd::NativeSimd B>
+        requires simd::SimdFloatingPoint<typename B::value_type>
+      [[nodiscard]] FORCEINLINE auto load(B const &x) const {
+        return floor(x);
       }
-#endif
     };
 
     template <typename S = double>
@@ -180,12 +176,12 @@ namespace nda {
           return alpha * reciprocal(x); // nested arrays: nda::reciprocal, found by ADL at instantiation
         }
       }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return simd::native_simd<T>(static_cast<T>(alpha)) / x;
+
+      template <simd::NativeSimd B>
+        requires simd::SimdFloatingPointOrComplex<typename B::value_type>
+      [[nodiscard]] FORCEINLINE auto load(B const &x) const {
+        return B(static_cast<typename B::value_type>(alpha)) / x;
       }
-#endif
     };
 
     template <typename P = double>
@@ -195,21 +191,21 @@ namespace nda {
         using std::pow;
         return pow(x, exponent);
       }
-#ifdef NDA_HAVE_XSIMD
-      // Batches only where std::pow(T, P) has type T: an exponent of the real precision of T or of type T, or any
-      // arithmetic exponent for double T. Integer exponents use exponentiation by squaring; a complex base with an
+
+      // Batches only where std::pow(T, P), T the value type of the batch, has type T: an exponent of the real precision
+      // of T or of type T, or any arithmetic exponent for double T. Integer exponents use exponentiation by squaring; a complex base with an
       // integer exponent is a distinct std::pow overload and stays on the scalar path.
-      template <simd::SimdFloatingPointOrComplex T>
-        requires(std::same_as<P, remove_complex_t<T>> or std::same_as<P, T> or (std::same_as<T, double> and std::is_arithmetic_v<P>))
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
+      template <simd::NativeSimd B>
+        requires(simd::SimdFloatingPointOrComplex<typename B::value_type>
+                 and (std::same_as<P, remove_complex_t<typename B::value_type>> or std::same_as<P, typename B::value_type>
+                      or (std::same_as<typename B::value_type, double> and std::is_arithmetic_v<P>)))
+      [[nodiscard]] FORCEINLINE auto load(B const &x) const {
         if constexpr (std::is_integral_v<P>) {
-          return xsimd::pow(x, exponent); // exact squares and x^0 = 1, like std::pow
+          return pow(x, exponent); // exact squares and x^0 = 1, like std::pow
         } else {
-          using xsimd::pow;
-          return pow(x, simd::native_simd<T>(exponent));
+          return pow(x, B(exponent));
         }
       }
-#endif
     };
 
     struct max_f {
@@ -218,13 +214,11 @@ namespace nda {
         return max(x, y);
       }
 
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdArithmetic T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x, simd::native_simd<T> const &y) const {
-        using xsimd::max;
+      template <simd::NativeSimd B>
+        requires simd::SimdArithmetic<typename B::value_type>
+      [[nodiscard]] FORCEINLINE auto load(B const &x, B const &y) const {
         return max(x, y);
       }
-#endif
     };
 
     struct min_f {
@@ -233,181 +227,52 @@ namespace nda {
         return min(x, y);
       }
 
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdArithmetic T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x, simd::native_simd<T> const &y) const {
-        using xsimd::min;
+      template <simd::NativeSimd B>
+        requires simd::SimdArithmetic<typename B::value_type>
+      [[nodiscard]] FORCEINLINE auto load(B const &x, B const &y) const {
         return min(x, y);
       }
-#endif
     };
 
     struct mul_f {
       FORCEINLINE auto operator()(auto const &x, auto const &y) const { return x * y; }
 
-#ifdef NDA_HAVE_XSIMD
-      template <simd::Vectorizable T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x, simd::native_simd<T> const &y) const {
+      template <simd::NativeSimd B>
+        requires simd::Vectorizable<typename B::value_type>
+      [[nodiscard]] FORCEINLINE auto load(B const &x, B const &y) const {
         return x * y;
       }
-#endif
     };
 
-    struct exp_f {
-      FORCEINLINE auto operator()(auto const &x) const {
-        using std::exp;
-        return exp(x);
-      }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::exp(x);
-      }
-#endif
-    };
+// Functor of a mapped function with the same name in std and in xsimd (batches of float, double and their complex types).
+#define NDA_DETAIL_MATH_FUNCTOR(F)                                                                                                                   \
+  struct F##_f {                                                                                                                                     \
+    FORCEINLINE auto operator()(auto const &x) const {                                                                                               \
+      using std::F;                                                                                                                                  \
+      return F(x);                                                                                                                                   \
+    }                                                                                                                                                \
+                                                                                                                                                     \
+    template <simd::NativeSimd B>                                                                                                                    \
+      requires simd::SimdFloatingPointOrComplex<typename B::value_type>                                                                              \
+    [[nodiscard]] FORCEINLINE auto load(B const &x) const {                                                                                          \
+      return F(x);                                                                                                                                   \
+    }                                                                                                                                                \
+  };
 
-    struct cos_f {
-      FORCEINLINE auto operator()(auto const &x) const {
-        using std::cos;
-        return cos(x);
-      }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::cos(x);
-      }
-#endif
-    };
+    NDA_DETAIL_MATH_FUNCTOR(exp)
+    NDA_DETAIL_MATH_FUNCTOR(cos)
+    NDA_DETAIL_MATH_FUNCTOR(sin)
+    NDA_DETAIL_MATH_FUNCTOR(tan)
+    NDA_DETAIL_MATH_FUNCTOR(cosh)
+    NDA_DETAIL_MATH_FUNCTOR(sinh)
+    NDA_DETAIL_MATH_FUNCTOR(tanh)
+    NDA_DETAIL_MATH_FUNCTOR(acos)
+    NDA_DETAIL_MATH_FUNCTOR(asin)
+    NDA_DETAIL_MATH_FUNCTOR(atan)
+    NDA_DETAIL_MATH_FUNCTOR(log)
+    NDA_DETAIL_MATH_FUNCTOR(sqrt)
 
-    struct sin_f {
-      FORCEINLINE auto operator()(auto const &x) const {
-        using std::sin;
-        return sin(x);
-      }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::sin(x);
-      }
-#endif
-    };
-
-    struct tan_f {
-      FORCEINLINE auto operator()(auto const &x) const {
-        using std::tan;
-        return tan(x);
-      }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::tan(x);
-      }
-#endif
-    };
-
-    struct cosh_f {
-      FORCEINLINE auto operator()(auto const &x) const {
-        using std::cosh;
-        return cosh(x);
-      }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::cosh(x);
-      }
-#endif
-    };
-
-    struct sinh_f {
-      FORCEINLINE auto operator()(auto const &x) const {
-        using std::sinh;
-        return sinh(x);
-      }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::sinh(x);
-      }
-#endif
-    };
-
-    struct tanh_f {
-      FORCEINLINE auto operator()(auto const &x) const {
-        using std::tanh;
-        return tanh(x);
-      }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::tanh(x);
-      }
-#endif
-    };
-
-    struct acos_f {
-      FORCEINLINE auto operator()(auto const &x) const {
-        using std::acos;
-        return acos(x);
-      }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::acos(x);
-      }
-#endif
-    };
-
-    struct asin_f {
-      FORCEINLINE auto operator()(auto const &x) const {
-        using std::asin;
-        return asin(x);
-      }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::asin(x);
-      }
-#endif
-    };
-
-    struct atan_f {
-      FORCEINLINE auto operator()(auto const &x) const {
-        using std::atan;
-        return atan(x);
-      }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::atan(x);
-      }
-#endif
-    };
-
-    struct log_f {
-      FORCEINLINE auto operator()(auto const &x) const {
-        using std::log;
-        return log(x);
-      }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::log(x);
-      }
-#endif
-    };
-
-    struct sqrt_f {
-      FORCEINLINE auto operator()(auto const &x) const {
-        using std::sqrt;
-        return sqrt(x);
-      }
-#ifdef NDA_HAVE_XSIMD
-      template <simd::SimdFloatingPointOrComplex T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::sqrt(x);
-      }
-#endif
-    };
+#undef NDA_DETAIL_MATH_FUNCTOR
 
   } // namespace detail
 
