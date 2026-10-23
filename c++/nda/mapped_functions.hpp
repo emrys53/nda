@@ -149,16 +149,10 @@ namespace nda {
         }
       }
 #ifdef NDA_HAVE_XSIMD
-      template <simd::SimdSignedArithmetic T>
-      [[nodiscard]] FORCEINLINE simd::native_simd<T> load(simd::native_simd<T> const &x) const {
-        return xsimd::abs(x);
-      }
-
-      template <simd::SimdComplex T>
-        requires simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>
+      template <typename T>
+        requires((simd::SimdSignedArithmetic<T> or simd::SimdComplex<T>) and simd::SimdPreservesLaneWidth<remove_complex_t<T>, T>)
       [[nodiscard]] FORCEINLINE simd::native_simd<remove_complex_t<T>> load(simd::native_simd<T> const &x) const {
-        using xsimd::abs;
-        return abs(x);
+        return xsimd::abs(x);
       }
 #endif
     };
@@ -455,11 +449,10 @@ namespace nda {
    */
   template <ArrayOrScalar A>
   decltype(auto) conj(A &&a) {
-    if constexpr (is_complex_v<get_value_t<A>>) {
+    if constexpr (is_complex_v<get_value_t<A>>)
       return nda::map(detail::conj_f{})(std::forward<A>(a));
-    } else {
+    else
       return std::forward<A>(a);
-    }
   }
 
   /**
@@ -491,8 +484,8 @@ namespace nda {
    * @return A lazy nda::expr_call object (nda::Array) or the result of `std::max` applied to the inputs (nda::Scalar).
    */
   template <ArrayOrScalar A, ArrayOrScalar B>
-    requires(((Scalar<A> and Scalar<B>) or (Array<A> and Array<B> and get_rank<A> == get_rank<B>))
-             and not is_complex_v<get_value_t<A>> and not is_complex_v<get_value_t<B>>)
+    requires(((Scalar<A> && Scalar<B>) || (Array<A> && Array<B> && get_rank<A> == get_rank<B>))
+             && !is_complex_v<get_value_t<A>> && !is_complex_v<get_value_t<B>>)
   [[nodiscard]] auto max(A &&a, B &&b) {
     return nda::map(detail::max_f{})(std::forward<A>(a), std::forward<B>(b));
   }
@@ -507,8 +500,8 @@ namespace nda {
    * @return A lazy nda::expr_call object (nda::Array) or the result of `std::min` applied to the inputs (nda::Scalar).
    */
   template <ArrayOrScalar A, ArrayOrScalar B>
-    requires(((Scalar<A> and Scalar<B>) or (Array<A> and Array<B> and get_rank<A> == get_rank<B>))
-             and not is_complex_v<get_value_t<A>> and not is_complex_v<get_value_t<B>>)
+    requires(((Scalar<A> && Scalar<B>) || (Array<A> && Array<B> && get_rank<A> == get_rank<B>))
+             && !is_complex_v<get_value_t<A>> && !is_complex_v<get_value_t<B>>)
   [[nodiscard]] auto min(A &&a, B &&b) {
     return nda::map(detail::min_f{})(std::forward<A>(a), std::forward<B>(b));
   }
@@ -595,7 +588,7 @@ namespace nda {
   /// \return A lazy nda::expr_call object (nda::Array) or the result of `nda::detail::isnan` applied to the object
   /// (complex nda::Scalar).
   template <typename A>
-    requires(Array<A> or is_complex_v<A>)
+    requires(Array<A> || is_complex_v<A>)
   auto isnan(A &&a) {
     return nda::map([](auto const &x) { return detail::isnan(x); })(std::forward<A>(a));
   }
@@ -613,7 +606,9 @@ namespace nda {
   /// \param a nda::Array object.
   /// \return A lazy nda::expr_call object.
   template <Array A>
-  auto exp(A &&a) requires(get_algebra<A> != 'M') {
+  auto exp(A &&a)
+    requires(get_algebra<A> != 'M')
+  {
     return nda::map(detail::exp_f{})(std::forward<A>(a));
   }
 
@@ -630,7 +625,9 @@ namespace nda {
   /// \param a nda::Array object.
   /// \return A lazy nda::expr_call object.
   template <Array A>
-  auto cos(A &&a) requires(get_algebra<A> != 'M') {
+  auto cos(A &&a)
+    requires(get_algebra<A> != 'M')
+  {
     return nda::map(detail::cos_f{})(std::forward<A>(a));
   }
 
@@ -647,7 +644,9 @@ namespace nda {
   /// \param a nda::Array object.
   /// \return A lazy nda::expr_call object.
   template <Array A>
-  auto sin(A &&a) requires(get_algebra<A> != 'M') {
+  auto sin(A &&a)
+    requires(get_algebra<A> != 'M')
+  {
     return nda::map(detail::sin_f{})(std::forward<A>(a));
   }
 
@@ -664,7 +663,9 @@ namespace nda {
   /// \param a nda::Array object.
   /// \return A lazy nda::expr_call object.
   template <Array A>
-  auto tan(A &&a) requires(get_algebra<A> != 'M') {
+  auto tan(A &&a)
+    requires(get_algebra<A> != 'M')
+  {
     return nda::map(detail::tan_f{})(std::forward<A>(a));
   }
 
@@ -681,7 +682,9 @@ namespace nda {
   /// \param a nda::Array object.
   /// \return A lazy nda::expr_call object.
   template <Array A>
-  auto cosh(A &&a) requires(get_algebra<A> != 'M') {
+  auto cosh(A &&a)
+    requires(get_algebra<A> != 'M')
+  {
     return nda::map(detail::cosh_f{})(std::forward<A>(a));
   }
 
@@ -698,7 +701,9 @@ namespace nda {
   /// \param a nda::Array object.
   /// \return A lazy nda::expr_call object.
   template <Array A>
-  auto sinh(A &&a) requires(get_algebra<A> != 'M') {
+  auto sinh(A &&a)
+    requires(get_algebra<A> != 'M')
+  {
     return nda::map(detail::sinh_f{})(std::forward<A>(a));
   }
 
@@ -715,7 +720,9 @@ namespace nda {
   /// \param a nda::Array object.
   /// \return A lazy nda::expr_call object.
   template <Array A>
-  auto tanh(A &&a) requires(get_algebra<A> != 'M') {
+  auto tanh(A &&a)
+    requires(get_algebra<A> != 'M')
+  {
     return nda::map(detail::tanh_f{})(std::forward<A>(a));
   }
 
@@ -732,7 +739,9 @@ namespace nda {
   /// \param a nda::Array object.
   /// \return A lazy nda::expr_call object.
   template <Array A>
-  auto acos(A &&a) requires(get_algebra<A> != 'M') {
+  auto acos(A &&a)
+    requires(get_algebra<A> != 'M')
+  {
     return nda::map(detail::acos_f{})(std::forward<A>(a));
   }
 
@@ -749,7 +758,9 @@ namespace nda {
   /// \param a nda::Array object.
   /// \return A lazy nda::expr_call object.
   template <Array A>
-  auto asin(A &&a) requires(get_algebra<A> != 'M') {
+  auto asin(A &&a)
+    requires(get_algebra<A> != 'M')
+  {
     return nda::map(detail::asin_f{})(std::forward<A>(a));
   }
 
@@ -766,7 +777,9 @@ namespace nda {
   /// \param a nda::Array object.
   /// \return A lazy nda::expr_call object.
   template <Array A>
-  auto atan(A &&a) requires(get_algebra<A> != 'M') {
+  auto atan(A &&a)
+    requires(get_algebra<A> != 'M')
+  {
     return nda::map(detail::atan_f{})(std::forward<A>(a));
   }
 
@@ -783,7 +796,9 @@ namespace nda {
   /// \param a nda::Array object.
   /// \return A lazy nda::expr_call object.
   template <Array A>
-  auto log(A &&a) requires(get_algebra<A> != 'M') {
+  auto log(A &&a)
+    requires(get_algebra<A> != 'M')
+  {
     return nda::map(detail::log_f{})(std::forward<A>(a));
   }
 
@@ -800,7 +815,9 @@ namespace nda {
   /// \param a nda::Array object.
   /// \return A lazy nda::expr_call object.
   template <Array A>
-  auto sqrt(A &&a) requires(get_algebra<A> != 'M') {
+  auto sqrt(A &&a)
+    requires(get_algebra<A> != 'M')
+  {
     return nda::map(detail::sqrt_f{})(std::forward<A>(a));
   }
 
