@@ -306,22 +306,26 @@ namespace nda {
     template <bool scalar_on_left, typename S, simd::NativeSimd B>
     [[nodiscard]] static FORCEINLINE B apply_scalar(S const &s, B const &z) {
       using value_t = typename B::value_type;
-      if constexpr (is_complex_v<value_t> and not is_complex_v<S> and not (scalar_on_left and OP == '/')) {
+      if constexpr (is_complex_v<value_t> and not is_complex_v<S> and not(scalar_on_left and OP == '/')) {
         using real_t  = remove_complex_t<value_t>;
         auto const re = z.real();
         auto const im = z.imag();
         auto const sb = typename B::real_batch(static_cast<real_t>(s));
         if constexpr (OP == '+') return B(re + sb, im);
         if constexpr (OP == '-') {
-          if constexpr (scalar_on_left) return B(sb - re, -im);
-          else return B(re - sb, im);
+          if constexpr (scalar_on_left)
+            return B(sb - re, -im);
+          else
+            return B(re - sb, im);
         }
         if constexpr (OP == '*') return B(re * sb, im * sb);
         if constexpr (OP == '/') return B(re / sb, im / sb);
       } else {
         auto const sb = B(static_cast<value_t>(s));
-        if constexpr (scalar_on_left) return apply(sb, z);
-        else return apply(z, sb);
+        if constexpr (scalar_on_left)
+          return apply(sb, z);
+        else
+          return apply(z, sb);
       }
     }
 
@@ -334,8 +338,10 @@ namespace nda {
         // the off-diagonal lanes hold the elements of the matrix (negated for scalar - matrix)
         auto const v   = m.load(i, j);
         auto const off = [&] {
-          if constexpr (OP == '-' and l_is_scalar) return -v;
-          else return v;
+          if constexpr (OP == '-' and l_is_scalar)
+            return -v;
+          else
+            return v;
         }();
         using simd_t = std::remove_cvref_t<decltype(v)>;
         // the lanes follow a row of a C-ordered matrix (diagonal element in lane i - j) or a column of an F-ordered one (lane j - i)
@@ -344,8 +350,10 @@ namespace nda {
         auto const mask = simd_t::batch_bool_type::from_mask(static_cast<uint64_t>(1) << lane);
         return xsimd::select(mask, apply_scalar<l_is_scalar>(s, v), off);
       };
-      if constexpr (l_is_scalar) return diagonal(r, l);
-      else return diagonal(l, r);
+      if constexpr (l_is_scalar)
+        return diagonal(r, l);
+      else
+        return diagonal(l, r);
     }
 
     public:
@@ -365,11 +373,11 @@ namespace nda {
     template <typename... Args>
     [[nodiscard]] FORCEINLINE auto load(Args &&...args) const {
       if constexpr (acts_on_diagonal) {
-        static_assert(not (std::is_same_v<std::remove_cvref_t<Args>, _linear_index_t> or ...),
+        static_assert(not(std::is_same_v<std::remove_cvref_t<Args>, _linear_index_t> or ...),
                       "Error in nda::expr: matrix +/- scalar acts on the diagonal and cannot be evaluated with a linear index");
         return load_diagonal(args...);
       } else if constexpr (l_is_scalar) {
-        static_assert(not (OP == '/' and algebra == 'M'), "Error in nda::expr: Matrix algebra not supported");
+        static_assert(not(OP == '/' and algebra == 'M'), "Error in nda::expr: Matrix algebra not supported");
         return apply_scalar<true>(l, r.load(args...));
       } else if constexpr (r_is_scalar) {
         return apply_scalar<false>(r, l.load(args...));

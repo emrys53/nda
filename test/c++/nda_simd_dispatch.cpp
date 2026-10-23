@@ -231,7 +231,7 @@ TEST(SIMD, RealScalarOnComplex) {
   matrix<C> m(n, n);
   fill_random(m, 8, -10, 10);
   matrix<C, F_layout> const f(m);
-  matrix<C> const r1       = m - 2.0;
+  matrix<C> const r1           = m - 2.0;
   matrix<C, F_layout> const r2 = 2.0 - f;
   for (long i = 0; i < n; ++i) {
     for (long j = 0; j < n; ++j) {
@@ -243,11 +243,11 @@ TEST(SIMD, RealScalarOnComplex) {
 
 TEST(SIMD, ScalarTree) {
   array<float, 2> a(5, 7), b(5, 7), c(5, 7);
-  auto native = a + b + c;
-  auto scalar = map([](auto const &x) { return x * x; })(native + a);
+  auto native  = a + b + c;
+  auto scalar  = map([](auto const &x) { return x * x; })(native + a);
   auto negated = -scalar;
-  auto scaled = 5.0f * (negated + 5.0f);
-  auto mapped = map([](auto const &x, auto const &y) { return x - y; })(scaled + scaled, scalar);
+  auto scaled  = 5.0f * (negated + 5.0f);
+  auto mapped  = map([](auto const &x, auto const &y) { return x - y; })(scaled + scaled, scalar);
   static_assert(is_simd_enabled_v<decltype(native)>);
   static_assert(not is_simd_enabled_v<decltype(scalar)>);
   static_assert(not is_simd_enabled_v<decltype(negated)>);

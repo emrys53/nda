@@ -434,8 +434,8 @@ namespace nda {
   /// Specialization of nda::has_simd_load_v for nda::expr types: the value type must be `T`, array operands must be
   /// loadable as `T` and scalar operands convertible to it.
   template <char OP, typename L, typename R, typename T>
-  inline constexpr bool has_simd_load_v<expr<OP, L, R>, T> = std::is_same_v<get_value_t<expr<OP, L, R>>, T>
-     and (is_scalar_v<L> ? std::is_convertible_v<std::remove_cvref_t<L>, T> : has_simd_load_v<L, T>)
+  inline constexpr bool has_simd_load_v<expr<OP, L, R>, T> =
+     std::is_same_v<get_value_t<expr<OP, L, R>>, T> and (is_scalar_v<L> ? std::is_convertible_v<std::remove_cvref_t<L>, T> : has_simd_load_v<L, T>)
      and (is_scalar_v<R> ? std::is_convertible_v<std::remove_cvref_t<R>, T> : has_simd_load_v<R, T>);
 
   /// Specialization of nda::is_expression for nda::expr_unary types.
