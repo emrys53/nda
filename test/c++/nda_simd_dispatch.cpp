@@ -8,6 +8,7 @@
 #include <nda/simd/mock_simd.hpp>
 #include <nda/simd/simd_dispatch.hpp>
 
+#include <algorithm>
 #include <vector>
 
 using namespace nda;
