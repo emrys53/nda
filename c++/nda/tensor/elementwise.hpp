@@ -87,7 +87,8 @@ namespace nda::tensor {
 
     // out = op(alpha * a, beta * b)
     template <typename A>
-    void assign_binary(binary_op op, get_value_t<A> alpha, A const &a, get_value_t<A> beta, auto const &b, auto &&out) { // NOLINT
+    // NOLINTNEXTLINE (we do not want to forward here)
+    void assign_binary(binary_op op, get_value_t<A> alpha, A const &a, get_value_t<A> beta, auto const &b, auto &&out) {
       visit_binary_expr(op, alpha, a, beta, b, [&](auto const &e) { out = e; });
     }
   } // namespace detail
