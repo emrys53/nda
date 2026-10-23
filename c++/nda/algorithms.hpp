@@ -159,9 +159,7 @@ namespace nda {
   /**
    * @brief Find the maximum element of an array.
    *
-   * @details It uses nda::fold and `std::max`. With xsimd and a SIMD-enabled array (nda::is_simd_enabled_v), the
-   * elements are compared in native batches (xsimd's `max`, which agrees with `std::max` on x86 but may treat NaN
-   * differently on other architectures) and the lanes are reduced at the end.
+   * @details It uses nda::fold and `std::max`, or SIMD batches for SIMD-enabled arrays (nda::is_simd_enabled_v).
    *
    * @tparam A nda::Array type.
    * @param a nda::Array object.
@@ -186,9 +184,7 @@ namespace nda {
   /**
    * @brief Find the minimum element of an array.
    *
-   * @details It uses nda::fold and `std::min`. With xsimd and a SIMD-enabled array (nda::is_simd_enabled_v), the
-   * elements are compared in native batches (xsimd's `min`, which agrees with `std::min` on x86 but may treat NaN
-   * differently on other architectures) and the lanes are reduced at the end.
+   * @details It uses nda::fold and `std::min`, or SIMD batches for SIMD-enabled arrays (nda::is_simd_enabled_v).
    *
    * @tparam A nda::Array type.
    * @param a nda::Array object.
@@ -213,15 +209,11 @@ namespace nda {
   /**
    * @brief Sum all the elements of an nda::Array object.
    *
-   * @details Accumulates in the type `Value`, which defaults to the value type of the array: `sum<A, long>(a)` of an
-   * `int` array accumulates in `long`. With xsimd and an array that is SIMD-enabled for `Value`
-   * (nda::is_simd_enabled_v<A, Value>), the elements are added in native batches of `Value` with four independent
-   * accumulators and the lanes are reduced at the end, so the order of the additions differs from the scalar fold
-   * (and so can the rounding of floating-point sums). Note that 8- and 16-bit integer arrays then accumulate in lanes
-   * of their own type, whereas the scalar fold promotes to `int`; pass a wider `Value` to avoid wrapping.
+   * @details The sum starts from `Value{0}`, so `sum<A, long>(a)` of an `int` array accumulates in `long`. SIMD-enabled
+   * arrays (nda::is_simd_enabled_v) are summed in SIMD batches, which can change the rounding of floating-point sums.
    *
    * @tparam A nda::Array type.
-   * @tparam Value nda::Scalar type of the accumulator and of the result, or an nda::Array type for arrays of arrays.
+   * @tparam Value nda::Scalar type to start the sum from, or an nda::Array type for arrays of arrays.
    * @param a nda::Array object.
    * @return Sum of all elements.
    */
@@ -337,13 +329,11 @@ namespace nda {
   /**
    * @brief Multiply all the elements of an nda::Array object.
    *
-   * @details Accumulates in the type `Value`, which defaults to the value type of the array. With xsimd and an array
-   * that is SIMD-enabled for `Value` (nda::is_simd_enabled_v<A, Value>), the elements are multiplied in native
-   * batches of `Value` with four independent accumulators and the lanes are reduced at the end, so the order of the
-   * multiplications differs from the scalar fold. The remarks on narrow integer types in nda::sum apply as well.
+   * @details The product starts from `Value{1}`. SIMD-enabled arrays (nda::is_simd_enabled_v) are multiplied in SIMD
+   * batches, which can change the rounding of floating-point products.
    *
    * @tparam A nda::Array type.
-   * @tparam Value nda::Scalar type of the accumulator and of the result, or an nda::Array type for arrays of arrays.
+   * @tparam Value nda::Scalar type to start the product from, or an nda::Array type for arrays of arrays.
    * @param a nda::Array object.
    * @return Product of all elements.
    */
