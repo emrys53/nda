@@ -26,7 +26,8 @@ def mounts = [:]
 
 def runBuild = { String platform, String prefix, List<String> envs, String simd ->
   def macos = platform.startsWith("macos-")
-  def regen = regenPlatforms.contains(platform)
+  /* the python bindings are regenerated from the default configuration only */
+  def regen = regenPlatforms.contains(platform) && simd == 'OFF'
   def buildDir = "$WORKSPACE_TMP/build-simd-$simd"
   /* install real branches in a fixed predictable place so apps can find them */
   def installPlatform = "$platform-simd-$simd"
@@ -151,6 +152,8 @@ def postBenchmarkComment = {
 /* map of all builds to run, populated below */
 def platforms = [:]
 def simdSettings = ['OFF', 'ON']
+/* platforms that also run with SIMDSupport=ON; the SIMD paths do not depend on CUDA or the sanitizers */
+def simdPlatforms = ["ubuntu-clang", "ubuntu-gcc", "ubuntu-intel", "macos-gcc", "macos-clang"]
 
 /****************** linux builds (in docker) */
 /* Each platform must have a corresponding Dockerfile.PLATFORM in jenkins/ */
@@ -158,8 +161,9 @@ def dockerPlatforms = ["ubuntu-clang", "ubuntu-gcc", "ubuntu-intel", "sanitize",
                        "ubuntu-clang-cuda", "ubuntu-gcc-cuda"]
 for (int i = 0; i < dockerPlatforms.size(); i++) {
   def platform = dockerPlatforms[i]
-  for (int j = 0; j < simdSettings.size(); j++) {
-    def simd = simdSettings[j]
+  def settings = simdPlatforms.contains(platform) ? simdSettings : ['OFF']
+  for (int j = 0; j < settings.size(); j++) {
+    def simd = settings[j]
     def stageName = "$platform-simd-$simd".toString()
     platforms[stageName] = { ->
       stage(stageName) {
@@ -185,8 +189,9 @@ def macosPlatforms = [
 for (int i = 0; i < macosPlatforms.size(); i++) {
   def platformEnv = macosPlatforms[i]
   def platform = platformEnv[0]
-  for (int j = 0; j < simdSettings.size(); j++) {
-    def simd = simdSettings[j]
+  def settings = simdPlatforms.contains("macos-$platform".toString()) ? simdSettings : ['OFF']
+  for (int j = 0; j < settings.size(); j++) {
+    def simd = settings[j]
     def stageName = "macos-$platform-simd-$simd".toString()
     platforms[stageName] = { -> node('macos && m1') {
       stage(stageName) { timeout(time: 1, unit: 'HOURS') {
@@ -198,7 +203,7 @@ for (int i = 0; i < macosPlatforms.size(); i++) {
 
 /****************** wrap-up */
 catchError(catchInterruptions: false) {
-  // Build and run tests on all platforms, with both SIMD settings.
+  // Build and run tests on all platforms and SIMD settings.
   parallel platforms
 
   if (currentBuild.currentResult == 'SUCCESS' && env.CHANGE_ID) {
