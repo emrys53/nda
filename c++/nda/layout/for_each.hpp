@@ -231,8 +231,8 @@ namespace nda {
 #else
       constexpr long simd_size = 1; // never used: without xsimd no array is SIMD-enabled
 #endif
-      constexpr auto flat_loop = has_contiguous_layout<First> and (has_contiguous_layout<Rest> and ...)
-         and is_elementwise_v<First> and (is_elementwise_v<Rest> and ...);
+      constexpr auto flat_loop =
+         has_contiguous_layout<First> and (has_contiguous_layout<Rest> and ...) and is_elementwise_v<First> and (is_elementwise_v<Rest> and ...);
       if constexpr (flat_loop) {
         const long n    = first.size();
         const long nlim = n & -simd_size;

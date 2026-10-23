@@ -108,10 +108,21 @@ TEST(NDA, ForEachSimdScalarFallback) {
     std::vector<idx_t> visited, expected;
     // the callable receives the arrays themselves (not copies), followed by the multi-index
     if constexpr (sizeof...(rest) == 0) {
-      nda::for_each_simd(no_simd, [&](auto const &x, auto const &...i) { EXPECT_EQ(&x, &first); visited.push_back({i...}); }, first);
+      nda::for_each_simd(
+         no_simd,
+         [&](auto const &x, auto const &...i) {
+           EXPECT_EQ(&x, &first);
+           visited.push_back({i...});
+         },
+         first);
     } else {
-      nda::for_each_simd(no_simd, [&](auto const &x, auto const &, auto const &...i) { EXPECT_EQ(&x, &first); visited.push_back({i...}); },
-                         first, rest...);
+      nda::for_each_simd(
+         no_simd,
+         [&](auto const &x, auto const &, auto const &...i) {
+           EXPECT_EQ(&x, &first);
+           visited.push_back({i...});
+         },
+         first, rest...);
     }
     nda::for_each(first.shape(), [&](auto const &...i) { expected.push_back({i...}); });
     EXPECT_EQ(visited, expected);
