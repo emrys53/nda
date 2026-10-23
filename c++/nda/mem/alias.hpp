@@ -52,7 +52,7 @@ namespace nda::mem {
   template <MemoryArray A>
   [[nodiscard]] memory_bounds get_memory_bounds(A const &a) noexcept {
     constexpr std::uintptr_t itemsize = sizeof(get_value_t<A>);
-    auto p                            = reinterpret_cast<std::uintptr_t>(a.data()); //NOLINT
+    auto p                            = reinterpret_cast<std::uintptr_t>(a.data()); // NOLINT (the bounds compare addresses as integers)
     if constexpr (has_contiguous_layout<A>) {
       return {.begin = p, .end = p + static_cast<std::uintptr_t>(a.size()) * itemsize};
     } else {
@@ -98,7 +98,7 @@ namespace nda::mem {
     // Classifies the array leaves of a source relative to the destination (see nda::mem::detect_aliasing).
     template <MemoryArray D>
     struct alias_checker {
-      D const &dst; //NOLINT
+      D const &dst; // NOLINT (the checker never outlives the destination)
       mem::memory_bounds bounds;
 
       template <typename T>
